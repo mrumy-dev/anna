@@ -2,44 +2,69 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ANNA – Deine Parking App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ANNA - Deine Parking App</title>
+  <meta name="description" content="Zeigt in Echtzeit, welche Parkfelder frei sind." />
+
+  <!-- Als Web-App installierbar (Homescreen) -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}" />
+  <meta name="theme-color" content="#16314f" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}" />
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='anna-logo.jpeg') }}" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ANNA" />
+
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body data-poll="{{ poll_interval_ms }}">
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">ANNA</span>
-      <span class="brand-sub">Deine Parking App</span>
+      <img class="brand-icon" src="{{ url_for('static', filename='icon.svg') }}" alt="" width="36" height="36" />
+      <div class="brand-text">
+        <span class="brand-mark">ANNA</span>
+        <span class="brand-sub">Deine Parking App</span>
+      </div>
     </div>
     <div class="status">
-      <span id="total-free" class="status-num">–</span>
+      <span id="total-free" class="status-num">&ndash;</span>
       <span class="status-label">freie Felder</span>
       <span id="mode-badge" class="badge" hidden>Simulation</span>
+      <span id="live-dot" class="live-dot" title="Verbindung" aria-hidden="true"></span>
     </div>
   </header>
 
   <main>
     <section class="filters" aria-label="Filter nach Parkfeldtyp">
-      <button class="chip is-active" data-filter="all">Alle</button>
-      <button class="chip" data-filter="normal">Normal</button>
-      <button class="chip" data-filter="family">Familie</button>
-      <button class="chip" data-filter="women">Frauen</button>
-      <button class="chip" data-filter="disabled">Behinderte</button>
+      <button class="chip is-active" data-filter="all" aria-pressed="true">Alle</button>
+      <button class="chip" data-filter="normal" aria-pressed="false">Normal</button>
+      <button class="chip" data-filter="family" aria-pressed="false">Familie</button>
+      <button class="chip" data-filter="women" aria-pressed="false">Frauen</button>
+      <button class="chip" data-filter="disabled" aria-pressed="false">Behinderte</button>
     </section>
 
-    <div id="areas" class="areas">
-      <!-- wird per JavaScript aus /api/state gefuellt -->
+    <p id="offline" class="offline" hidden role="status">
+      Keine Verbindung &ndash; versuche es erneut &hellip;
+    </p>
+
+    <div id="areas" class="areas" aria-live="polite">
+      <p id="loading" class="loading">Lade Parkfelder &hellip;</p>
     </div>
 
     <p id="sim-hint" class="sim-hint" hidden>
       Simulationsmodus: Auf ein Parkfeld tippen, um es zu belegen oder frei zu geben.
       <button id="sim-random" class="link-btn" type="button">Zufaellig setzen</button>
     </p>
+
+    <section id="stats" class="stats" aria-label="Auslastung" hidden>
+      <h2 class="stats-title">Auslastung</h2>
+      <div id="stats-body" class="stats-body"></div>
+      <p class="stats-note">Mittel- und Spitzenwerte seit Start des Backends.</p>
+    </section>
   </main>
 
   <footer class="foot">
-    PoE-Projekt ANNA · Teilprojekt Informatik · HFTM
+    PoE-Projekt ANNA &middot; Teilprojekt Informatik &middot; HFTM
   </footer>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>

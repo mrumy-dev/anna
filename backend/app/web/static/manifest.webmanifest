@@ -1,0 +1,16 @@
+{
+  "name": "ANNA - Deine Parking App",
+  "short_name": "ANNA",
+  "description": "Zeigt in Echtzeit, welche Parkfelder frei sind.",
+  "lang": "de",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16314f",
+  "theme_color": "#16314f",
+  "icons": [
+    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/static/anna-logo.jpeg", "sizes": "1126x426", "type": "image/jpeg" }
+  ]
+}
