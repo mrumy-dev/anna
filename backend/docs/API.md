@@ -1,9 +1,8 @@
 # API-Schnittstelle – ANNA Backend
 
-Dieses Dokument ist der **Vertrag zwischen Oberfläche und Backend**. Das in
-Claude Design entworfene UI wird gegen genau diese Endpunkte verdrahtet; Claude
-Code hält das Backend bei dieser Form. Solange beide Seiten sich an dieses
-Dokument halten, passen Design und Logik zusammen.
+Dieses Dokument ist der **Vertrag zwischen Oberfläche und Backend**. Die Web-App
+wird gegen genau diese Endpunkte verdrahtet; das Backend hält diese Form stabil.
+Solange beide Seiten sich an dieses Dokument halten, passen UI und Logik zusammen.
 
 Basis-URL in der Entwicklung: `http://localhost:5000`
 Auf dem Raspberry Pi: `http://<IP-des-Pi>:5000`

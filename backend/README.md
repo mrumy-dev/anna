@@ -1,12 +1,12 @@
 # ANNA Backend (Teilprojekt Informatik)
 
-Backend und funktionsfähige Platzhalter-Oberfläche für den ANNA-Smart-Parking-
-Demonstrator. Läuft **ohne Raspberry Pi** am Laptop (Sensor-Simulator) und auf dem
-Pi mit echten Reed-Schaltern – nur über eine Umgebungsvariable umgeschaltet.
+Backend und Web-App für den ANNA-Smart-Parking-Demonstrator. Läuft **ohne
+Raspberry Pi** am Laptop (Sensor-Simulator) und auf dem Pi mit echten
+Reed-Schaltern – nur über eine Umgebungsvariable umgeschaltet.
 
-→ Kontext für Claude Code: **`CLAUDE.md`**
+→ Projektkontext (Entscheidungen, Konventionen, Backlog): **`docs/Projektkontext.md`**
 → Architekturkonzept (Lieferobjekt): **`docs/Architekturkonzept.md`**
-→ API-Vertrag (Schnittstelle zum Design): **`docs/API.md`**
+→ API-Vertrag (Schnittstelle Frontend <-> Backend): **`docs/API.md`**
 
 ## Installation & Start
 

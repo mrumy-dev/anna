@@ -1,7 +1,7 @@
-# CLAUDE.md – Kontext für Claude Code
+# Projektkontext – Teilprojekt Informatik (ANNA)
 
-Diese Datei gibt Claude Code den vollständigen Kontext für das Teilprojekt
-Informatik des PoE-Projekts **ANNA**. Bitte vor dem Arbeiten lesen.
+Diese Datei fasst Kontext und Konventionen fuer die Backend- und Frontend-
+Entwicklung zusammen. Bitte vor dem Arbeiten lesen.
 
 ## Was ist ANNA?
 
@@ -26,29 +26,31 @@ Belegungslogik, JSON-API und Web-UI. Autoren: Faris Ridzal, Mohamed Rumy.
 
 ## Was diese Codebasis schon kann
 
-Ein lauffähiges Flask-Backend mit sauberer Schichtung, das **ohne Raspberry Pi**
-am Laptop läuft (Sensor-Simulator) und auf dem Pi nur durch eine Umgebungsvariable
-auf echtes GPIO umgestellt wird.
+Ein lauffähiges Flask-Backend mit sauberer Schichtung und eine vollständige
+Web-App, die **ohne Raspberry Pi** am Laptop läuft (Sensor-Simulator) und auf dem
+Pi nur durch eine Umgebungsvariable auf echtes GPIO umgestellt wird.
 
 ```
 anna-backend/
 ├── config/parking_layout.json   # Areale, Felder, Typen, GPIO-Pins  <- Schnittstelle zu Elektro
 ├── app/
-│   ├── models.py                # Domäne: Area, Space, SpaceType, ParkingSystem
+│   ├── models.py                # Domäne: Area, Space, SpaceType, ParkingSystem, StatsCollector
 │   ├── config.py                # Layout laden
 │   ├── main.py                  # Flask: API + Auslieferung Web-UI
 │   ├── sensors/
 │   │   ├── base.py              # SensorBackend (abstrakt): read_all()
 │   │   ├── simulated.py         # Simulator (Standard, ohne Hardware)
 │   │   └── gpio.py              # gpiozero-Backend (echte Reed-Schalter)
-│   └── web/                     # templates/index.html, static/style.css, static/app.js
-├── tests/test_parking.py        # pytest (läuft ohne Pi)
+│   └── web/                     # Web-App: templates/index.html, static/{style.css,app.js,icon.svg,manifest.webmanifest}
+├── tests/                       # pytest (laeuft ohne Pi): test_parking, test_api, test_features
 ├── docs/Architekturkonzept.md   # benotetes Lieferobjekt (Deutsch)
 └── run.py
 ```
 
-API: `GET /api/state`, `GET /api/health`, `POST /api/sim/toggle/<id>`,
-`POST /api/sim/randomize` (die beiden sim-Endpunkte nur im Simulationsmodus).
+API (Kernvertrag in `docs/API.md`): `GET /api/state`, `GET /api/health`,
+`POST /api/sim/toggle/<id>`, `POST /api/sim/randomize` (sim-Endpunkte nur im
+Simulationsmodus). Additiv: `GET /api/stream` (SSE), `GET /api/stats`,
+`GET /api/reservations`, `POST`/`DELETE /api/reserve/<id>`.
 
 ## So läuft es
 
@@ -58,6 +60,8 @@ pip install -r requirements.txt
 python run.py            # Simulator -> http://localhost:5000
 pytest                   # Tests
 ```
+Auf macOS belegt der AirPlay-Empfänger Port 5000; dann
+`ANNA_PORT=5050 python run.py` verwenden.
 Auf dem Pi zusätzlich `pip install gpiozero lgpio`, dann
 `ANNA_BACKEND=gpio python run.py`.
 
@@ -71,6 +75,8 @@ Auf dem Pi zusätzlich `pip install gpiozero lgpio`, dann
    harten Import von `gpiozero` auf Modulebene einführen – nur lazy in `gpio.py`.
 4. Domänenlogik bleibt frei von Flask- und Hardware-Abhängigkeiten und ist
    getestet.
+5. **Der API-Vertrag in `docs/API.md` bleibt stabil.** Zusatzfunktionen kommen
+   über neue Endpunkte, nicht durch Änderung bestehender Antworten.
 
 ## Konventionen
 
@@ -80,7 +86,7 @@ Auf dem Pi zusätzlich `pip install gpiozero lgpio`, dann
 - Kleine, klar benannte Funktionen; Typannotationen verwenden.
 - Vor dem Commit: `pytest` muss grün sein.
 
-## Offene Aufgaben (Backlog für Claude Code)
+## Offene Aufgaben (Backlog)
 
 Kurzfristig (diese/nächste Woche):
 - [x] `docs/Architekturkonzept.md` inhaltlich finalisiert (Status Version 1.0,
@@ -96,7 +102,8 @@ Software-Ausbau:
 - [x] Live-Updates per Server-Sent-Events (`GET /api/stream`, additiv).
 - [x] AP 5.3 teilweise: Reservierung (`/api/reserve/...`) und
       Statistik/Auslastung (`/api/stats`) umgesetzt. Schranke als Aktor offen.
-- [ ] Web-UI verfeinern (Barrierefreiheit, Darstellung „voll").
+- [x] Web-UI als vollständige Web-App (Live-Updates, Reservierung, Auslastung,
+      installierbar). Optional: eigene Detailansicht je Areal.
 - [x] Tests erweitert: API-Endpunkte mit Flask-Testclient (`tests/test_api.py`),
       Reservierung/Statistik/SSE/GPIO-Backend (`tests/test_features.py`).
       `create_app(backend_factory=...)` erlaubt Backend-Injektion für Tests.

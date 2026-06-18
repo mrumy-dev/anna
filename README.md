@@ -1,59 +1,60 @@
-# ANNA – Projektpaket Informatik
+# ANNA – Teilprojekt Informatik
 
-Paket für das Teilprojekt **Informatik** des PoE-Projekts ANNA (Smart-Parking-
-Demonstrator, HFTM). Es ist für zwei Werkzeuge aufgebaut:
+Software für den **Smart-Parking-Demonstrator ANNA** (PoE-Projekt, HFTM,
+Gruppe 11). Ein Modellparkplatz erkennt mit Sensoren, welche Parkfelder belegt
+sind; eine Web-App zeigt das in Echtzeit an. Dieses Repository enthält das
+**Backend (Flask-API)** und das **Frontend (Web-App)**.
 
-- **`design/`** → für **Claude Design**: Oberfläche der App entwerfen.
-- **`backend/`** → für **Claude Code**: Backend bauen und Architekturkonzept
-  ausarbeiten.
-
-Beide Teile sind über einen festen **API-Vertrag** (`backend/docs/API.md`)
-verbunden: Das Design zeigt genau die Daten, die das Backend liefert.
+Autoren: Faris Ridzal, Mohamed Rumy.
 
 ```
 anna/
-├── design/                     →  CLAUDE DESIGN
-│   ├── Design-Brief.md           Briefing zum Einfügen in Claude Design
-│   ├── Brand.md                  Farben, Typografie, Ton
-│   └── brand/anna-logo.jpeg      Logo als Referenz
-│
-└── backend/                    →  CLAUDE CODE
-    ├── CLAUDE.md                 Kontext + Aufgabenliste für Claude Code
-    ├── README.md                 Installation, Betrieb, Tests, Deployment
+└── backend/
+    ├── README.md                  Installation, Betrieb, Tests, Deployment
     ├── docs/
-    │   ├── Architekturkonzept.md  benotetes Lieferobjekt (AP 2.3)
-    │   └── API.md                 Schnittstelle Design <-> Backend
-    ├── config/parking_layout.json Modell + Pin-Belegung (Schnittstelle zu Elektro)
-    ├── app/ …                     Flask-Backend + Platzhalter-Web-UI
-    └── tests/ …                   pytest
+    │   ├── Architekturkonzept.md   benotetes Lieferobjekt (AP 2.3) + .docx-Export
+    │   ├── API.md                  API-Vertrag (Frontend <-> Backend)
+    │   └── Projektkontext.md       Entscheidungen, Konventionen, Backlog
+    ├── config/parking_layout.json  Modell + Pin-Belegung (Schnittstelle zu Elektro)
+    ├── app/                        Flask-Backend + Web-App (HTML/CSS/JS)
+    └── tests/                      pytest
 ```
 
-## Empfohlener Ablauf
+## Schnellstart
 
-**1. Oberfläche in Claude Design**
-Den Inhalt von `design/Design-Brief.md` in Claude Design einfügen, das Logo
-`design/brand/anna-logo.jpeg` anhängen. Claude Design entwirft die Screens
-(Übersicht, Areal-Detail, „voll"-Zustand). Farben/Typo aus `Brand.md`. Das fertige
-Design exportieren.
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-**2. Backend in Claude Code**
-Den Ordner `backend/` in Claude Code öffnen. Claude Code liest `CLAUDE.md` (voller
-Kontext und Backlog) und kann sofort loslegen: Backend läuft mit
-`python run.py` (Simulator, keine Hardware nötig). Tests mit `pytest`.
+python run.py            # Simulator -> http://localhost:5000
+pytest                   # Tests
+```
 
-**3. Zusammenführen**
-Das aus Claude Design exportierte UI ersetzt die Platzhalter-Oberfläche in
-`backend/app/web/` und wird gegen die Endpunkte aus `backend/docs/API.md`
-verdrahtet. Da die API-Form fest ist, passt beides zusammen.
+Im Simulationsmodus laufen Backend und Web-App **ohne Hardware** am Laptop: auf
+ein Parkfeld tippen, um es zu belegen/frei zu geben, oder „Zufaellig setzen".
+Auf macOS belegt der AirPlay-Empfänger Port 5000 – dann `ANNA_PORT=5050
+python run.py` verwenden.
 
-## Worauf das Paket bereits Rücksicht nimmt
+Auf dem **Raspberry Pi 4** mit echten Reed-Schaltern: `pip install gpiozero lgpio`
+und `ANNA_BACKEND=gpio python run.py` (Pin-Belegung in
+`backend/config/parking_layout.json`). Details siehe `backend/README.md`.
 
-- **Raspberry Pi 4 + Python** statt Arduino (Entscheid aus Sitzungsprotokoll 04).
-- **Variante 2:** frei/belegt + Filter (Familie/Frauen/Behinderte) + Google-Maps-
-  Weiterleitung.
-- Entwicklung **ohne Hardware** möglich (Sensor-Simulator), Umschalten auf echte
-  Sensoren über `ANNA_BACKEND=gpio`.
-- Modell mit 2 Arealen (Blumenstrasse 4 + Hauptstrasse 3 Felder).
+## Was die App kann
 
-Details und offene Punkte (u. a. die Sensor-/Magnet-Frage mit Elektro) stehen in
+- **Live-Anzeige** frei/belegt je Parkfeld (Polling + Server-Sent-Events).
+- **Filter** nach Parkfeldtyp (Alle / Normal / Familie / Frauen / Behinderte).
+- **„Voll"-Zustand** je Areal mit Verweis auf ein freies Alternativ-Areal.
+- **Anfahrt** per Google-Maps-Link (keine eigene Navigation, Variante 2).
+- **Reservierung** einzelner Felder und **Auslastungsanzeige**.
+- Mobil-zuerst, responsiv, **als Web-App installierbar** (Homescreen).
+
+## Architektur in einem Satz
+
+Reed-Schalter → GPIO → **Sensor-Backend** (austauschbar: Simulator/GPIO) →
+**Domänenmodell** (Belegungslogik) → **Flask-JSON-API** → **Web-App**.
+
+Das Backend ist konfigurationsgetrieben (`config/parking_layout.json`) und läuft
+immer ohne Hardware (Simulator). Hintergrund, Entscheidungen und offene Punkte
+(u. a. die Sensor-/Magnet-Frage mit Elektro) stehen in
 `backend/docs/Architekturkonzept.md`.
