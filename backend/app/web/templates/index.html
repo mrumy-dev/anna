@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ANNA – Deine Parking App</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body data-poll="{{ poll_interval_ms }}">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">ANNA</span>
+      <span class="brand-sub">Deine Parking App</span>
+    </div>
+    <div class="status">
+      <span id="total-free" class="status-num">–</span>
+      <span class="status-label">freie Felder</span>
+      <span id="mode-badge" class="badge" hidden>Simulation</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="filters" aria-label="Filter nach Parkfeldtyp">
+      <button class="chip is-active" data-filter="all">Alle</button>
+      <button class="chip" data-filter="normal">Normal</button>
+      <button class="chip" data-filter="family">Familie</button>
+      <button class="chip" data-filter="women">Frauen</button>
+      <button class="chip" data-filter="disabled">Behinderte</button>
+    </section>
+
+    <div id="areas" class="areas">
+      <!-- wird per JavaScript aus /api/state gefuellt -->
+    </div>
+
+    <p id="sim-hint" class="sim-hint" hidden>
+      Simulationsmodus: Auf ein Parkfeld tippen, um es zu belegen oder frei zu geben.
+      <button id="sim-random" class="link-btn" type="button">Zufaellig setzen</button>
+    </p>
+  </main>
+
+  <footer class="foot">
+    PoE-Projekt ANNA · Teilprojekt Informatik · HFTM
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

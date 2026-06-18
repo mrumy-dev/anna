@@ -1,0 +1,31 @@
+{
+  "_comment": "Zentrale Konfiguration des Modellparkplatzes ANNA. Diese Datei ist zugleich die SCHNITTSTELLE ZU ELEKTRO: hier wird festgehalten, welches Parkfeld an welchem GPIO-Pin (BCM-Nummerierung) des Raspberry Pi haengt. Elektro traegt die tatsaechlichen Pins ein, sobald die Verkabelung steht. Feldtypen: normal | family | women | disabled. 'invert': true, falls ein Sensor verkehrt herum verdrahtet ist (belegt/frei vertauscht).",
+  "settings": {
+    "poll_interval_ms": 1500,
+    "bounce_time_s": 0.05,
+    "default_invert": false
+  },
+  "areas": [
+    {
+      "id": "blumenstrasse",
+      "name": "Parkplatz Blumenstrasse",
+      "maps_url": "https://www.google.com/maps/search/?api=1&query=Parkplatz+Blumenstrasse",
+      "spaces": [
+        { "id": "B1", "type": "normal",   "gpio_pin": 17 },
+        { "id": "B2", "type": "family",   "gpio_pin": 27 },
+        { "id": "B3", "type": "women",    "gpio_pin": 22 },
+        { "id": "B4", "type": "disabled", "gpio_pin": 23 }
+      ]
+    },
+    {
+      "id": "hauptstrasse",
+      "name": "Parkplatz Hauptstrasse",
+      "maps_url": "https://www.google.com/maps/search/?api=1&query=Parkplatz+Hauptstrasse",
+      "spaces": [
+        { "id": "H1", "type": "normal", "gpio_pin": 24 },
+        { "id": "H2", "type": "normal", "gpio_pin": 25 },
+        { "id": "H3", "type": "family", "gpio_pin": 5  }
+      ]
+    }
+  ]
+}

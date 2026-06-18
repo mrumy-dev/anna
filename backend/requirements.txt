@@ -1,0 +1,8 @@
+# Immer benoetigt (Laptop + Raspberry Pi)
+Flask>=3.0
+
+# Nur fuer Tests
+pytest>=8.0
+
+# --- Nur auf dem Raspberry Pi zusaetzlich installieren ---
+# pip install gpiozero lgpio
