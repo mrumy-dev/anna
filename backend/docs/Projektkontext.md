@@ -96,9 +96,13 @@ Kurzfristig (diese/nächste Woche):
       Architekturkonzept festhalten.
 
 Software-Ausbau:
+- [x] Produktionsreif fuer den Pi: Debug standardmaessig aus, threaded-Server
+      (mehrere Besucher + SSE), optionaler WSGI-Server (waitress/gunicorn via
+      `wsgi.py`), GPIO-Cleanup, robustes GPIO-Backend (defekter Pin killt den
+      Start nicht), Layout-Validierung, systemd-Autostart (`deploy/`).
 - [ ] `GpioSensorBackend` auf echter Hardware verifizieren (Pull-up, Entprellung,
-      ggf. `invert` je Feld). Logik (inkl. `invert`) ist per Fake-gpiozero-Test
-      bereits abgesichert.
+      ggf. `invert` je Feld). Logik (inkl. `invert`) und Ausfallsicherheit sind
+      per Fake-gpiozero-Test bereits abgesichert; finaler Test steht am echten Pi aus.
 - [x] Live-Updates per Server-Sent-Events (`GET /api/stream`, additiv).
 - [x] AP 5.3 teilweise: Reservierung (`/api/reserve/...`) und
       Statistik/Auslastung (`/api/stats`) umgesetzt. Schranke als Aktor offen.

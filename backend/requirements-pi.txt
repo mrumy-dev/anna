@@ -1,0 +1,10 @@
+# Zusaetzliche Pakete NUR auf dem Raspberry Pi (echte Sensoren ueber GPIO).
+# Auf dem Laptop nicht noetig - der Simulator laeuft ohne diese Pakete.
+#
+#   pip install -r requirements.txt        # Basis
+#   pip install -r requirements-pi.txt     # zusaetzlich auf dem Pi
+#
+# gpiozero nutzt auf Raspberry Pi OS Bookworm standardmaessig das lgpio-Backend.
+
+gpiozero>=2.0
+lgpio>=0.2
