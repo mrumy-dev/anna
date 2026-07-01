@@ -1,8 +1,13 @@
 # Immer benoetigt (Laptop + Raspberry Pi)
 Flask>=3.0
 
+# Produktiver WSGI-Server (optional, plattformuebergreifend).
+# Genutzt ueber ANNA_SERVER=waitress python run.py  oder  waitress-serve wsgi:application
+waitress>=3.0
+
 # Nur fuer Tests
 pytest>=8.0
 
 # --- Nur auf dem Raspberry Pi zusaetzlich installieren ---
-# pip install gpiozero lgpio
+# Echte Reed-Schalter ueber GPIO: siehe requirements-pi.txt
+#   pip install -r requirements-pi.txt
