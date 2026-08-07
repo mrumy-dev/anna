@@ -47,13 +47,20 @@ BCM_NOTES: dict[int, str] = {
     15: "UART RXD - belegt, wenn die serielle Konsole aktiv ist",
 }
 
-# BCM-Pins, die sich problemlos als Sensoreingang eignen.
+# BCM-Pins, die sich problemlos als Sensoreingang eignen (Empfehlung).
 SAFE_BCM_PINS: tuple[int, ...] = (
     4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23,
     24, 25, 26, 27,
 )
 
-VALID_BCM_PINS: tuple[int, ...] = tuple(sorted(BCM_TO_BOARD))
+# ALLE GPIOs des Headers - inklusive der Sonderpins 0, 1, 2, 3, 14, 15.
+# Wichtig fuer die Pin-Suche: Bei einer Verwechslung von BCM- und
+# Header-Nummerierung landen Draehte gerade dort (Header 27 -> GPIO0,
+# Header 5 -> GPIO3). Eine Suche, die nur SAFE_BCM_PINS abdeckt, waere blind
+# fuer genau den Fehler, den sie finden soll.
+ALL_BCM_PINS: tuple[int, ...] = tuple(sorted(BCM_TO_BOARD))
+
+VALID_BCM_PINS: tuple[int, ...] = ALL_BCM_PINS
 
 
 class PinError(ValueError):

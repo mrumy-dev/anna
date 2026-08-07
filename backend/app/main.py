@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import time
 from collections.abc import Callable, Iterator
 
@@ -36,11 +37,32 @@ BackendFactory = Callable[[ParkingSystem, dict], SensorBackend]
 
 
 def _default_backend(system: ParkingSystem, settings: dict) -> SensorBackend:
-    """Backend anhand der Umgebungsvariable ANNA_BACKEND (Default: Simulator)."""
+    """Backend anhand der Umgebungsvariable ANNA_BACKEND (Default: Simulator).
+
+    Mit ANNA_STRICT=1 (Standard im systemd-Dienst) wird der Start abgebrochen,
+    wenn der gpio-Modus verlangt ist, aber kein einziger Sensor geoeffnet werden
+    konnte. Besser ein Dienst, der sichtbar nicht startet, als eine Web-App, die
+    ueberzeugend aussieht und in Wirklichkeit nichts misst.
+    """
     name = os.environ.get("ANNA_BACKEND", "simulated")
-    return create_backend(
+    backend = create_backend(
         name, system, bounce_time=settings.get("bounce_time_s", 0.05)
     )
+
+    strict = os.environ.get("ANNA_STRICT", "0").strip().lower() in {
+        "1", "true", "yes", "on"}
+    if strict and name.lower() == "gpio":
+        health = backend.health()
+        if health["total"] and health["ok"] == 0:
+            backend.close()
+            raise RuntimeError(
+                "ANNA_BACKEND=gpio verlangt, aber kein einziger Sensor konnte "
+                "geoeffnet werden. Start abgebrochen, damit keine falschen Daten "
+                "angezeigt werden. Pruefen: laeuft bereits ein zweiter "
+                "ANNA-Prozess (sudo systemctl stop anna)? Ist gpiozero/lgpio "
+                "installiert? Siehe docs/Sensor-Inbetriebnahme.md."
+            )
+    return backend
 
 
 def _diag_write_enabled() -> bool:
@@ -134,7 +156,29 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
 
     @app.get("/api/health")
     def api_health():
-        return jsonify({"status": "ok", "mode": rt.backend.name})
+        """Betriebszustand - inklusive der Frage, ob Sensoren wirklich liefern.
+
+        Frueher meldete dieser Endpunkt immer "ok", sobald der Prozess lief -
+        auch dann, wenn im gpio-Modus KEIN einziger Pin geoeffnet werden konnte.
+        Genau deshalb blieb der Sensorausfall unbemerkt. Die Zusatzfelder sind
+        additiv, 'status' wird nur im Fehlerfall abgewertet.
+        """
+        sensors = rt.backend.health()
+        if sensors["total"] and sensors["ok"] == 0:
+            status = "error"
+        elif sensors["failed"]:
+            status = "degraded"
+        else:
+            status = "ok"
+        return jsonify({
+            "status": status,
+            "mode": rt.backend.name,
+            "live": rt.backend.name == "gpio",
+            "host": socket.gethostname(),
+            "sensors_ok": sensors["ok"],
+            "sensors_total": sensors["total"],
+            "sensors_failed": sensors["failed"],
+        })
 
     # --- API: Live-Updates per Server-Sent-Events (additiv) ---------------
     @app.get("/api/stream")

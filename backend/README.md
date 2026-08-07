@@ -34,6 +34,25 @@ Live-Updates gleichzeitig). Auf macOS ist Port 5000 oft belegt – dann
 | `ANNA_DEBUG` | `0` | `1` = Debug-Modus (nur Entwicklung) |
 | `ANNA_SERVER` | `werkzeug` | `werkzeug` (threaded) oder `waitress` |
 | `ANNA_THREADS` | `8` | Threads bei `waitress` |
+| `ANNA_STRICT` | `0` | `1` = Start abbrechen, wenn im `gpio`-Modus kein Sensor läuft |
+| `ANNA_DIAG` | `0` | `1` = Pin-Zuordnung über `/diag` änderbar (nur zum Einrichten) |
+
+### Läuft wirklich die echte Hardware?
+
+Damit eine Vorführung nie versehentlich mit erfundenen Daten läuft, zeigt die
+App die Betriebsart selbst an: grünes **LIVE**-Abzeichen bei echten Sensoren,
+rotes **SIMULATION**-Abzeichen plus unübersehbares Banner (inkl. Rechnername)
+im Simulationsmodus. Prüfen lässt es sich auch direkt:
+
+```bash
+curl http://<IP-des-Pi>:5000/api/health
+# {"status":"ok","mode":"gpio","live":true,"host":"raspberrypi","sensors_ok":7,...}
+```
+
+`ANNA_STRICT=1` (im systemd-Dienst voreingestellt) bricht den Start ab, wenn der
+`gpio`-Modus verlangt ist, aber kein einziger Sensor geöffnet werden konnte –
+besser ein Dienst, der sichtbar nicht startet, als eine App, die überzeugend
+aussieht und nichts misst.
 
 ### Produktiver WSGI-Server (optional)
 

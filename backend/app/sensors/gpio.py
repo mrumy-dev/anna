@@ -74,12 +74,28 @@ class GpioSensorBackend(SensorBackend):
                 log.warning("GPIO%s fuer Feld %s nicht nutzbar: %s",
                             pin, space_id, exc)
 
+        # Welche Pin-Factory wirklich aktiv ist (lgpio/rpigpio/native), gehoert
+        # ins Startlog - bei Problemen ist das die erste Frage.
+        try:
+            from gpiozero import Device  # noqa: WPS433
+            factory = type(Device.pin_factory).__name__
+        except Exception:  # noqa: BLE001
+            factory = "unbekannt"
+
+        expected = len([s for s in specs if s.get("pin") is not None])
         if not self._buttons:
-            log.warning("Kein einziger GPIO-Pin konnte initialisiert werden - "
-                        "es werden keine Sensordaten gelesen.")
+            # Totalausfall ist ein Fehler, keine Randnotiz: genau dieser Fall
+            # blieb bisher unbemerkt, weil er nur als Warnung im Log stand.
+            log.error("KEIN einziger GPIO-Pin konnte geoeffnet werden (%d erwartet, "
+                      "pin_factory=%s). Es werden KEINE Sensordaten gelesen - "
+                      "alle Parkfelder bleiben auf 'frei'.", expected, factory)
+        elif len(self._buttons) < expected:
+            log.error("Nur %d von %d Sensoren aktiv (pin_factory=%s). Fehlende "
+                      "Felder: %s", len(self._buttons), expected, factory,
+                      ", ".join(sorted(self._errors)))
         else:
-            log.info("GPIO-Backend bereit: %d Sensor(en) aktiv.",
-                     len(self._buttons))
+            log.info("GPIO-Backend bereit: %d Sensor(en) aktiv (pin_factory=%s).",
+                     len(self._buttons), factory)
 
     def _make_button(self, button_cls, spec: dict):
         pull_up = spec.get("pull_up", True)
@@ -154,13 +170,22 @@ class GpioSensorBackend(SensorBackend):
             })
         return rows
 
+    def health(self) -> dict:
+        failed = [sid for sid in self._specs if sid not in self._buttons]
+        return {
+            "ok": len(self._buttons),
+            "total": len(self._specs),
+            "failed": sorted(failed),
+        }
+
     def used_pins(self) -> set[int]:
         return {
             spec["pin"] for spec in self._specs.values()
             if spec.get("pin") is not None
         }
 
-    def scan(self, duration_s: float = 6.0, interval_s: float = 0.05) -> list[dict]:
+    def scan(self, duration_s: float = 6.0, interval_s: float = 0.05,
+             include_special: bool = True) -> list[dict]:
         """Beobachtet alle brauchbaren GPIO-Pins und meldet, welche sich aendern.
 
         Damit findet man die tatsaechliche Verdrahtung: Waehrend des Scans ein
@@ -180,8 +205,13 @@ class GpioSensorBackend(SensorBackend):
             if spec.get("pin") is not None
         }
 
+        # Bewusst ALLE Header-GPIOs, nicht nur die empfohlenen: Bei einer
+        # Verwechslung von BCM- und Header-Nummerierung landen Draehte gerade
+        # auf den Sonderpins (Header 27 -> GPIO0, Header 5 -> GPIO3). Eine
+        # Suche ohne diese Pins waere blind fuer genau diesen Fehler.
+        candidates = pinmap.ALL_BCM_PINS if include_special else pinmap.SAFE_BCM_PINS
         extra: dict[int, object] = {}
-        for pin in pinmap.SAFE_BCM_PINS:
+        for pin in candidates:
             if pin in used:
                 continue
             try:
@@ -232,6 +262,8 @@ class GpioSensorBackend(SensorBackend):
                 "end": last.get(pin),
                 "changes": counts.get(pin, 0),
                 "assigned_to": by_space.get(pin),
+                "note": pinmap.pin_warning(pin),
+                "safe": pin in pinmap.SAFE_BCM_PINS,
             }
             for pin in sorted(counts)
         ]

@@ -12,6 +12,53 @@ http://<IP-des-Pi>:5000/diag
 
 ---
 
+## Zuerst: Sehe ich ueberhaupt echte Sensoren?
+
+Bevor irgendetwas gemessen wird, muss zweifelsfrei feststehen, dass die
+angezeigte Seite **nicht** die Simulation ist. Drei Merkmale, alle sofort
+sichtbar:
+
+| Merkmal | Echte Sensoren (gpio) | Simulation |
+|---|---|---|
+| Abzeichen oben rechts | gruenes **LIVE** | rotes **SIMULATION** |
+| Banner oben auf der Seite | keines | grosser roter Kasten „Simulationsmodus – keine echten Sensoren" |
+| Tippen auf eine Kachel | passiert nichts | Kachel schaltet um |
+
+Zusaetzlich nennt das Banner den **Rechnernamen**, mit dem der Browser verbunden
+ist. Steht dort der Name eures Laptops statt des Pi, ist die falsche Adresse
+geoeffnet.
+
+Hart nachpruefen laesst es sich hier:
+
+```bash
+curl http://<IP-des-Pi>:5000/api/health
+```
+
+```json
+{ "status": "ok", "mode": "gpio", "live": true,
+  "host": "raspberrypi", "sensors_ok": 7, "sensors_total": 7 }
+```
+
+- `"live": true` und `"mode": "gpio"` → echte Sensoren.
+- `"live": false` → **Simulation**, es wird nichts gemessen.
+- `"status": "degraded"` → einzelne Sensoren fehlen, siehe `sensors_failed`.
+- `"status": "error"` → **kein einziger** Sensor liefert Daten.
+
+### Damit das gar nicht erst passieren kann: ANNA_STRICT
+
+Ist `ANNA_STRICT=1` gesetzt (im mitgelieferten systemd-Dienst standardmaessig),
+**startet das Backend gar nicht**, wenn der gpio-Modus verlangt ist, aber kein
+einziger Sensor geoeffnet werden konnte. Ein Dienst, der sichtbar nicht startet,
+ist deutlich besser als eine Web-App, die ueberzeugend aussieht und in
+Wirklichkeit nichts misst.
+
+```bash
+sudo systemctl status anna      # zeigt den Startfehler im Klartext
+journalctl -u anna -b --no-pager | tail -20
+```
+
+---
+
 ## Das Prinzip: Rohpegel statt Auswertung
 
 Die normale App zeigt nur das Ergebnis („frei" / „belegt"). Fuer die Fehlersuche
@@ -125,8 +172,20 @@ Fuer unser Layout ergibt das:
 | H3 | 5 | GPIO5 (Header 29) | GPIO3 (I2C, feste Pull-ups) |
 
 Wurde nach **Header-Nummern** verdrahtet, koennen B1 und H2 grundsaetzlich nie
-etwas melden, und die uebrigen Felder liegen auf falschen Pins. Loesung ohne
-Umverdrahten – in `config/parking_layout.json`:
+etwas melden, und die uebrigen Felder liegen auf falschen Pins.
+
+> **Eindeutiges Erkennungsmerkmal.** Rechnet man beide Listen gegeneinander,
+> gibt es genau eine Ueberschneidung: Header-Pin 22 ist GPIO25 – und GPIO25 ist
+> im Layout das Feld **H2**. Wenn also ein Auto auf **B3** dazu fuehrt, dass in
+> der App **H2** als belegt erscheint, ist die Verwechslung damit bewiesen.
+
+> **Vorsicht beim Testen.** Haengt ein Reed-Kontakt tatsaechlich an Header-Pin 17
+> (3V3) und schaltet gegen GND, wird beim Auflegen des Autos die
+> 3,3-V-Versorgung kurzgeschlossen – der Pi kann abstuerzen oder neu starten.
+> Wer das vermutet, misst **vorher stromlos** mit dem Multimeter durch, statt es
+> auszuprobieren.
+
+Loesung ohne Umverdrahten – in `config/parking_layout.json`:
 
 ```json
 "settings": { "numbering": "board" }

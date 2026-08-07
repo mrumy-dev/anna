@@ -29,12 +29,22 @@
     <div class="status">
       <span id="total-free" class="status-num">&ndash;</span>
       <span class="status-label">freie Felder</span>
-      <span id="mode-badge" class="badge" hidden>Simulation</span>
+      <span id="mode-badge" class="badge">&hellip;</span>
       <span id="live-dot" class="live-dot" title="Verbindung" aria-hidden="true"></span>
     </div>
   </header>
 
   <main>
+    <!-- Unuebersehbarer Hinweis, falls KEINE echten Sensoren gelesen werden.
+         Wird von app.js aus /api/health gesteuert. -->
+    <div id="sim-banner" class="sim-banner" hidden role="alert">
+      <strong>Simulationsmodus &ndash; keine echten Sensoren.</strong>
+      Die angezeigte Belegung ist <strong>erfunden</strong> und stammt nicht vom
+      Modellparkplatz. Für den echten Betrieb muss das Backend auf dem Raspberry Pi
+      mit <code>ANNA_BACKEND=gpio</code> laufen.
+      <span id="sim-banner-host" class="sim-banner-host"></span>
+    </div>
+
     <section class="filters" aria-label="Filter nach Parkfeldtyp">
       <button class="chip is-active" data-filter="all" aria-pressed="true">Alle</button>
       <button class="chip" data-filter="normal" aria-pressed="false">Normal</button>
@@ -45,6 +55,11 @@
 
     <p id="offline" class="offline" hidden role="status">
       Keine Verbindung &ndash; versuche es erneut &hellip;
+    </p>
+
+    <p id="sensor-warning" class="offline" hidden role="status">
+      <span id="sensor-warning-text"></span>
+      <a class="link-btn" href="/diag">Zur Sensor-Diagnose</a>
     </p>
 
     <div id="areas" class="areas" aria-live="polite">

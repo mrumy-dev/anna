@@ -122,6 +122,37 @@ main { padding: clamp(16px, 4vw, 40px); max-width: 1000px; margin: 0 auto; }
   font-size: 14px;
   font-weight: 600;
 }
+
+/* Simulationswarnung: bewusst gross und nicht wegklickbar - eine Vorfuehrung
+   darf nie versehentlich mit erfundenen Daten laufen. */
+.sim-banner {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 2px solid var(--occupied);
+  background: var(--occupied-soft);
+  color: #8a3a26;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.sim-banner strong { color: var(--occupied); }
+.sim-banner code {
+  background: rgba(192, 86, 63, .14);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 13px;
+}
+.sim-banner-host {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #a3705e;
+}
+
+/* Zustandsabzeichen in der Kopfzeile: LIVE gruen, Simulation rot. */
+.badge.badge-live { background: var(--green); color: #06320a; }
+.badge.badge-sim { background: var(--occupied); color: #fff; }
+.badge.badge-warn { background: var(--reserved); color: #3d2900; }
 .loading { color: var(--muted); font-size: 14px; }
 
 .areas { display: grid; gap: 20px; }

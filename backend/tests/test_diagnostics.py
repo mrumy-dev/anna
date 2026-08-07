@@ -342,6 +342,132 @@ def test_diag_page_renders():
     assert "diag.js" in html
 
 
+# --- /api/health meldet den ECHTEN Sensorzustand --------------------------
+def test_health_ok_when_all_sensors_work(gpio_app):
+    client, _ = gpio_app
+    h = client.get("/api/health").get_json()
+    assert h["status"] == "ok"
+    assert h["sensors_ok"] == 7 and h["sensors_total"] == 7
+    assert h["sensors_failed"] == []
+
+
+def test_health_degraded_when_one_sensor_fails(fake_gpio):
+    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 5: 1}, fail_pins=(25,))
+
+    def factory(system, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(system))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+    assert h["status"] == "degraded"
+    assert h["sensors_failed"] == ["H2"]      # GPIO25 gehoert zu H2
+
+
+def test_health_error_when_no_sensor_works(fake_gpio):
+    """Der Fall, der bisher als 'ok' durchging - 0 von 7 Sensoren."""
+    fake_gpio(fail_pins=(17, 27, 22, 23, 24, 25, 5))
+
+    def factory(system, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(system))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+    assert h["status"] == "error"
+    assert h["sensors_ok"] == 0 and h["sensors_total"] == 7
+
+
+def test_health_stays_ok_in_simulation():
+    app = create_app()
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+    assert h["status"] == "ok"
+    assert h["mode"] == "simulated"
+
+
+# --- Betriebsart eindeutig erkennbar --------------------------------------
+def test_health_marks_simulation_as_not_live():
+    """Die App muss beweisen koennen, dass sie NICHT simuliert."""
+    app = create_app()
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+    assert h["live"] is False
+    assert h["mode"] == "simulated"
+    assert h["host"]          # Rechnername, um den Pi zu identifizieren
+
+
+def test_health_marks_gpio_as_live(gpio_app):
+    client, _ = gpio_app
+    h = client.get("/api/health").get_json()
+    assert h["live"] is True
+    assert h["mode"] == "gpio"
+
+
+def test_index_contains_simulation_banner():
+    app = create_app()
+    app.testing = True
+    html = app.test_client().get("/").get_data(as_text=True)
+    assert "sim-banner" in html
+    assert "Simulationsmodus" in html
+
+
+# --- Strikt-Modus: lieber gar nicht starten als falsch anzeigen ------------
+def test_strict_mode_refuses_start_without_sensors(monkeypatch, fake_gpio):
+    fake_gpio(fail_pins=(17, 27, 22, 23, 24, 25, 5))
+    monkeypatch.setenv("ANNA_BACKEND", "gpio")
+    monkeypatch.setenv("ANNA_STRICT", "1")
+
+    with pytest.raises(RuntimeError) as exc:
+        create_app()
+    assert "kein einziger Sensor" in str(exc.value)
+
+
+def test_strict_mode_allows_start_with_sensors(monkeypatch, fake_gpio):
+    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+    monkeypatch.setenv("ANNA_BACKEND", "gpio")
+    monkeypatch.setenv("ANNA_STRICT", "1")
+
+    app = create_app()
+    app.testing = True
+    assert app.test_client().get("/api/health").get_json()["status"] == "ok"
+
+
+def test_without_strict_mode_app_still_starts(monkeypatch, fake_gpio):
+    """Ohne ANNA_STRICT bleibt das bisherige Verhalten - aber sichtbar krank."""
+    fake_gpio(fail_pins=(17, 27, 22, 23, 24, 25, 5))
+    monkeypatch.setenv("ANNA_BACKEND", "gpio")
+    monkeypatch.delenv("ANNA_STRICT", raising=False)
+
+    app = create_app()
+    app.testing = True
+    assert app.test_client().get("/api/health").get_json()["status"] == "error"
+
+
+# --- Pin-Suche darf die Sonderpins nicht auslassen -------------------------
+def test_scan_covers_special_pins(fake_gpio):
+    """Bei BCM/Board-Verwechslung landen Draehte auf GPIO0 (Header 27)
+    und GPIO3 (Header 5) - dort muss die Suche hinschauen."""
+    fake_gpio({17: 1})
+    backend = _backend([{"id": "A1", "pin": 17, "pull_up": True}])
+    scanned = {r["pin"] for r in backend.scan(duration_s=0.3, interval_s=0.05)}
+
+    for special in (0, 1, 2, 3, 14, 15):
+        assert special in scanned, f"GPIO{special} fehlt in der Pin-Suche"
+
+
+def test_scan_marks_unsafe_pins(fake_gpio):
+    fake_gpio({17: 1})
+    backend = _backend([{"id": "A1", "pin": 17, "pull_up": True}])
+    rows = {r["pin"]: r for r in backend.scan(duration_s=0.3, interval_s=0.05)}
+    assert rows[2]["safe"] is False and rows[2]["note"]    # I2C
+    assert rows[6]["safe"] is True
+
+
 def test_state_contract_unchanged_by_diagnostics():
     """Der Vertrag aus docs/API.md darf sich nicht veraendert haben."""
     app = create_app()

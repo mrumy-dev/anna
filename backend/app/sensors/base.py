@@ -88,6 +88,16 @@ class SensorBackend(ABC):
             for space_id, occupied in self.read_all().items()
         ]
 
+    def health(self) -> dict:
+        """Wie viele Sensoren liefern tatsaechlich Daten?
+
+        Wichtig fuer /api/health: Ein Backend, das laeuft, aber keinen einzigen
+        Pin oeffnen konnte, darf sich nicht als gesund melden - sonst sieht der
+        Betrieb "ok", waehrend in Wirklichkeit nichts gemessen wird.
+        """
+        total = len(self.read_all())
+        return {"ok": total, "total": total, "failed": []}
+
     def close(self) -> None:
         """Ressourcen freigeben (z. B. GPIO-Pins). Default: nichts zu tun."""
         return None

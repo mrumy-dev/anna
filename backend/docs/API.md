@@ -64,6 +64,28 @@ Feldbedeutung:
 { "status": "ok", "mode": "simulated" }
 ```
 
+Im `gpio`-Modus kommen **additive** Felder zum tatsächlichen Sensorzustand dazu:
+
+```json
+{
+  "status": "degraded",
+  "mode": "gpio",
+  "sensors_ok": 6,
+  "sensors_total": 7,
+  "sensors_failed": ["H2"]
+}
+```
+
+| `status` | Bedeutung |
+|---|---|
+| `ok` | alle konfigurierten Sensoren liefern Daten |
+| `degraded` | einzelne Sensoren melden sich nicht (siehe `sensors_failed`) |
+| `error` | **kein einziger** Sensor liefert Daten – die Anzeige ist wertlos |
+
+Ohne diese Felder meldete der Endpunkt auch dann `ok`, wenn im `gpio`-Modus kein
+einziger Pin geöffnet werden konnte; genau deshalb blieb ein Sensorausfall
+unbemerkt. Die Web-App wertet den Zustand aus und blendet einen Hinweis ein.
+
 ## POST /api/sim/toggle/&lt;space_id&gt;
 
 Nur im Simulationsmodus. Schaltet ein Parkfeld belegt/frei (für Demo und

@@ -40,7 +40,10 @@ def test_health_ok(client):
     resp = client.get("/api/health")
     assert resp.status_code == 200
     data = resp.get_json()
-    assert data == {"status": "ok", "mode": "simulated"}
+    # Der Vertrag aus docs/API.md muss enthalten sein. Zusatzfelder zum
+    # Sensorzustand (sensors_ok/-total/-failed) sind additiv erlaubt.
+    assert data["status"] == "ok"
+    assert data["mode"] == "simulated"
 
 
 # --- GET /api/state -------------------------------------------------------

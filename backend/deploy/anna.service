@@ -11,6 +11,10 @@ WorkingDirectory=/home/pi/anna/backend
 Environment=ANNA_BACKEND=gpio
 Environment=ANNA_HOST=0.0.0.0
 Environment=ANNA_PORT=5000
+# Bricht den Start ab, wenn im gpio-Modus KEIN Sensor geoeffnet werden kann.
+# Besser ein Dienst, der sichtbar nicht startet, als eine Web-App, die
+# ueberzeugend aussieht und in Wirklichkeit nichts misst.
+Environment=ANNA_STRICT=1
 # Waehrend der Inbetriebnahme der Sensoren: erlaubt das Korrigieren der
 # Pin-Zuordnung ueber die Diagnose-Seite /diag. Fuer die Vorfuehrung entfernen.
 Environment=ANNA_DIAG=1
