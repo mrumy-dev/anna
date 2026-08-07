@@ -64,6 +64,28 @@ Feldbedeutung:
 { "status": "ok", "mode": "simulated" }
 ```
 
+Im `gpio`-Modus kommen **additive** Felder zum tatsächlichen Sensorzustand dazu:
+
+```json
+{
+  "status": "degraded",
+  "mode": "gpio",
+  "sensors_ok": 6,
+  "sensors_total": 7,
+  "sensors_failed": ["H2"]
+}
+```
+
+| `status` | Bedeutung |
+|---|---|
+| `ok` | alle konfigurierten Sensoren liefern Daten |
+| `degraded` | einzelne Sensoren melden sich nicht (siehe `sensors_failed`) |
+| `error` | **kein einziger** Sensor liefert Daten – die Anzeige ist wertlos |
+
+Ohne diese Felder meldete der Endpunkt auch dann `ok`, wenn im `gpio`-Modus kein
+einziger Pin geöffnet werden konnte; genau deshalb blieb ein Sensorausfall
+unbemerkt. Die Web-App wertet den Zustand aus und blendet einen Hinweis ein.
+
 ## POST /api/sim/toggle/&lt;space_id&gt;
 
 Nur im Simulationsmodus. Schaltet ein Parkfeld belegt/frei (für Demo und
@@ -132,6 +154,72 @@ aufgehoben.
   `GET /api/reservations`. `404` bei unbekanntem Feld.
 
 Fehlerantworten der API haben durchgehend die Form `{ "error": "<Text>" }`.
+
+### Diagnose / Inbetriebnahme
+
+Werkzeuge für den Anschluss der echten Sensoren. Die Oberfläche dazu liegt unter
+**`/diag`**. Für die normale Park-App sind diese Endpunkte nicht nötig.
+
+#### GET /api/diagnostics
+
+Zeigt je Parkfeld den **rohen elektrischen Pegel** neben der Auswertung:
+
+```json
+{
+  "mode": "gpio",
+  "numbering": "bcm",
+  "layout_file": "/home/pi/anna/backend/config/parking_layout.json",
+  "write_enabled": false,
+  "spaces": [
+    {
+      "space_id": "B1",
+      "pin": 17, "configured_pin": 17,
+      "pin_label": "GPIO17 (Header-Pin 11)", "board_pin": 11,
+      "raw": 1, "occupied": false,
+      "invert": false, "pull_up": true,
+      "ok": true, "error": null,
+      "changes": 4, "last_change_s": 2.1,
+      "hint": null
+    }
+  ]
+}
+```
+
+| Feld | Bedeutung |
+|---|---|
+| `raw` | elektrischer Pegel am Pin: `1` = HIGH (3,3 V), `0` = LOW (GND), `null` = nicht lesbar |
+| `occupied` | daraus abgeleitete Auswertung (berücksichtigt `pull_up` und `invert`) |
+| `changes` | **wie oft der Pegel sich seit dem Start geändert hat** – bleibt der Wert `0`, während ein Auto auf- und abgestellt wird, kommt das Signal gar nicht am Pi an |
+| `last_change_s` | Sekunden seit dem letzten Wechsel (`null` = noch nie) |
+| `ok` / `error` | ob der Sensor initialisiert werden konnte |
+| `board_pin` | zugehörige **physische** Nummer auf der Steckerleiste |
+| `hint` | Warnung, falls die konfigurierte Zahl als Header-Pin gemeint gewesen sein könnte |
+
+#### GET /api/diag/pins
+
+Referenztabelle BCM ↔ physischer Header-Pin, inklusive Hinweis, welche Pins sich
+als Sensoreingang eignen.
+
+#### POST /api/diag/scan?seconds=6
+
+Nur im `gpio`-Modus (sonst HTTP 400). Beobachtet alle brauchbaren GPIO-Pins für
+die angegebene Dauer und meldet, welche ihren Pegel geändert haben. Damit findet
+man die **tatsächliche** Verdrahtung: während des Scans ein Auto umstellen.
+
+```json
+{ "seconds": 6.0, "pins": [
+  { "pin": 22, "board_pin": 15, "start": 1, "end": 0, "changes": 2, "assigned_to": "B3" }
+] }
+```
+
+#### POST /api/diag/assign/&lt;space_id&gt; · POST /api/diag/reload
+
+Schreibt `gpio_pin` / `invert` / `pull_up` in `config/parking_layout.json`
+(mit `.bak`-Sicherung) und lädt die Sensoren neu – ohne Neustart des Dienstes.
+Body: `{ "gpio_pin": 22, "invert": true, "pull_up": false }`.
+
+Aus Sicherheitsgründen **standardmässig gesperrt** (HTTP 403). Zum Einrichten das
+Backend mit `ANNA_DIAG=1` starten; für die Vorführung wieder entfernen.
 
 ---
 

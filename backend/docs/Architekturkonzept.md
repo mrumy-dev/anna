@@ -192,15 +192,24 @@ Sie wird in der Datei `config/parking_layout.json` festgehalten – diese Datei 
 das „Vertragsdokument" zwischen den beiden Teams. Elektro trägt ein, welcher
 Sensor an welchem Pin hängt; Informatik liest genau diese Felder ein.
 
-| Parkfeld | Areal | Typ | GPIO-Pin (BCM) | Signal | Bemerkung |
+| Parkfeld | Areal | Typ | GPIO-Pin (BCM) | **Physischer Header-Pin** | Signal |
 |---|---|---|---|---|---|
-| B1 | Blumenstrasse | normal | 17 | digital | … |
-| B2 | Blumenstrasse | family | 27 | digital | … |
-| B3 | Blumenstrasse | women | 22 | digital | … |
-| B4 | Blumenstrasse | disabled | 23 | digital | … |
-| H1 | Hauptstrasse | normal | 24 | digital | … |
-| H2 | Hauptstrasse | normal | 25 | digital | … |
-| H3 | Hauptstrasse | family | 5 | digital | … |
+| B1 | Blumenstrasse | normal | 17 | **11** | digital |
+| B2 | Blumenstrasse | family | 27 | **13** | digital |
+| B3 | Blumenstrasse | women | 22 | **15** | digital |
+| B4 | Blumenstrasse | disabled | 23 | **16** | digital |
+| H1 | Hauptstrasse | normal | 24 | **18** | digital |
+| H2 | Hauptstrasse | normal | 25 | **22** | digital |
+| H3 | Hauptstrasse | family | 5 | **29** | digital |
+
+> **Beide Spalten sind verbindlich.** Die BCM-Nummer ist die, mit der die
+> Software arbeitet; die Header-Nummer ist die, die man an der Steckerleiste
+> abzaehlt. Wird nur eine der beiden weitergegeben, entsteht die haeufigste
+> Fehlerquelle des Projekts: Als *physischer* Pin waere die Zahl 17 die
+> 3,3-V-Versorgung und die Zahl 25 die Masse – beide koennen nie ein
+> Sensorsignal liefern. Muss abweichend nach Header-Nummern verdrahtet werden,
+> ist in `config/parking_layout.json` `"numbering": "board"` zu setzen; die
+> Software rechnet dann selbst um (siehe `docs/Sensor-Inbetriebnahme.md`).
 
 *Die Pins sind Vorschläge und von Elektro zu bestätigen.* Verdrahtung je Sensor:
 Reed-Schalter zwischen GPIO und GND, interner Pull-up aktiv (in der Software

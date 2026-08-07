@@ -142,33 +142,21 @@ def test_stream_emits_sse_event(client):
 
 
 # --- GpioSensorBackend ueber Fake-gpiozero --------------------------------
-def test_gpio_backend_reads_and_inverts(monkeypatch):
+def test_gpio_backend_reads_and_inverts(fake_gpio):
     """Prueft Lazy-Import und invert-Logik ohne echte Hardware."""
-    fake = types.ModuleType("gpiozero")
-
-    class FakeButton:
-        def __init__(self, pin, pull_up=True, bounce_time=None):
-            self.pin = pin
-
-        @property
-        def is_pressed(self) -> bool:
-            return self.pin == 17  # nur Pin 17 ist "gedrueckt"
-
-        def close(self) -> None:
-            pass
-
-    fake.Button = FakeButton
-    monkeypatch.setitem(sys.modules, "gpiozero", fake)
+    # Pin 17 auf LOW = Reed geschlossen = belegt; Pin 27 bleibt HIGH (offen).
+    fake_gpio({17: 0, 27: 1})
 
     from app.sensors.gpio import GpioSensorBackend
 
-    backend = GpioSensorBackend(
-        pin_map={"B1": 17, "B2": 27, "B3": None},
-        invert_map={"B1": False, "B2": True},
-    )
+    backend = GpioSensorBackend([
+        {"id": "B1", "pin": 17, "invert": False, "pull_up": True},
+        {"id": "B2", "pin": 27, "invert": True, "pull_up": True},
+        {"id": "B3", "pin": None, "invert": False, "pull_up": True},
+    ])
     readings = backend.read_all()
 
     assert backend.name == "gpio"
-    assert readings["B1"] is True   # gedrueckt, nicht invertiert -> belegt
-    assert readings["B2"] is True   # nicht gedrueckt, invertiert -> belegt
+    assert readings["B1"] is True   # LOW, nicht invertiert -> belegt
+    assert readings["B2"] is True   # HIGH (frei), invertiert -> belegt
     assert "B3" not in readings     # Pin None wird uebersprungen

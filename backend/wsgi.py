@@ -6,9 +6,10 @@ Beispiele (auf dem Raspberry Pi, aus dem Ordner backend/):
 
     gunicorn --workers 1 --threads 8 --bind 0.0.0.0:5000 wsgi:application
 
-Der Backend-Typ wird ueber ANNA_BACKEND gewaehlt (Standard: Simulator):
+Es laeuft der Echtbetrieb (echte Sensoren) - das ist der Standard. Nur zum
+Entwickeln ohne Hardware:
 
-    ANNA_BACKEND=gpio waitress-serve --port=5000 wsgi:application
+    ANNA_BACKEND=simulated waitress-serve --port=5000 wsgi:application
 """
 
 from __future__ import annotations

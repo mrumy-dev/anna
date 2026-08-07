@@ -5,6 +5,10 @@
 "use strict";
 
 const POLL_MS = parseInt(document.body.dataset.poll || "1500", 10);
+// Im Echtbetrieb ist die Seite eine reine Anzeige: keine Bedienelemente, an
+// denen sich von Hand etwas veraendern liesse. Reservierung ist in
+// config/parking_layout.json ueber settings.show_reservations zuschaltbar.
+const SHOW_RESERVATIONS = document.body.dataset.reservations === "1";
 const TYPE_LABELS = {
   normal: "Normal",
   family: "Familie",
@@ -27,6 +31,10 @@ const els = {
   simRandom: document.getElementById("sim-random"),
   liveDot: document.getElementById("live-dot"),
   offline: document.getElementById("offline"),
+  sensorWarning: document.getElementById("sensor-warning"),
+  sensorWarningText: document.getElementById("sensor-warning-text"),
+  simBanner: document.getElementById("sim-banner"),
+  simBannerHost: document.getElementById("sim-banner-host"),
   stats: document.getElementById("stats"),
   statsBody: document.getElementById("stats-body"),
 };
@@ -63,7 +71,8 @@ function setConn(status) {
 function render(state) {
   lastState = state;
   simMode = state.mode === "simulated";
-  els.modeBadge.hidden = !simMode;
+  // Das Betriebsart-Abzeichen wird aus /api/health gesteuert (refreshHealth) -
+  // hier nur die Simulationssteuerung ein-/ausblenden.
   els.simHint.hidden = !simMode;
   els.totalFree.textContent = state.free;
 
@@ -148,7 +157,7 @@ function renderSpace(space) {
     <span class="space-type">${TYPE_LABELS[space.type] || space.type}</span>`;
 
   // Reservierungs-Steuerung: freie Felder reservieren, reservierte freigeben.
-  if (!space.occupied) {
+  if (SHOW_RESERVATIONS && !space.occupied) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "resv-btn" + (reserved ? " cancel" : "");
@@ -250,6 +259,54 @@ function applyReservationResponse(data) {
   if (lastState) render(lastState);
 }
 
+// --- Betriebsart und Sensor-Zustand ----------------------------------------
+// Zwei Fragen, die die App selbst beantworten muss:
+//   1. Sind das ECHTE Sensoren oder die Simulation?
+//   2. Liefern die Sensoren ueberhaupt Daten?
+// Beides ist sonst unsichtbar: Ein ausgefallener Sensor sieht exakt aus wie ein
+// freier Parkplatz, und die Simulation sieht aus wie der echte Betrieb.
+async function refreshHealth() {
+  try {
+    const res = await fetch("/api/health", { cache: "no-store" });
+    if (!res.ok) return;
+    const h = await res.json();
+
+    // 1. Betriebsart - unuebersehbar, wenn es NICHT die echten Sensoren sind.
+    if (h.live) {
+      els.modeBadge.textContent = "Live";
+      els.modeBadge.className = "badge badge-live";
+      els.modeBadge.title = `Echte Sensoren auf ${h.host}`;
+      els.simBanner.hidden = true;
+    } else {
+      els.modeBadge.textContent = "Simulation";
+      els.modeBadge.className = "badge badge-sim";
+      els.modeBadge.title = `Simulierte Daten auf ${h.host}`;
+      els.simBannerHost.textContent = `Verbunden mit: ${h.host}`;
+      els.simBanner.hidden = false;
+    }
+
+    // 2. Sensorzustand
+    if (h.status === "error") {
+      show(`Kein Sensor liefert Daten (0 von ${h.sensors_total}). `
+        + "Die Anzeige ist derzeit nicht verlässlich.");
+      els.modeBadge.className = "badge badge-sim";
+    } else if (h.status === "degraded") {
+      show(`${h.sensors_failed.length} von ${h.sensors_total} Sensoren melden sich nicht`
+        + ` (${h.sensors_failed.join(", ")}).`);
+      if (h.live) els.modeBadge.className = "badge badge-warn";
+    } else {
+      els.sensorWarning.hidden = true;
+    }
+  } catch (err) {
+    /* Verbindungsfehler behandelt bereits refreshState */
+  }
+
+  function show(text) {
+    els.sensorWarningText.textContent = text + " ";
+    els.sensorWarning.hidden = false;
+  }
+}
+
 // --- Auslastung ------------------------------------------------------------
 async function refreshStats() {
   try {
@@ -286,8 +343,12 @@ function escapeHtml(s) {
 }
 
 // --- Start -----------------------------------------------------------------
-refreshReservations();
 startLive();
 refreshStats();
-setInterval(refreshReservations, 4000);
+refreshHealth();
 setInterval(refreshStats, 4000);
+setInterval(refreshHealth, 5000);
+if (SHOW_RESERVATIONS) {
+  refreshReservations();
+  setInterval(refreshReservations, 4000);
+}

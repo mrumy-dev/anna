@@ -100,9 +100,27 @@ Software-Ausbau:
       (mehrere Besucher + SSE), optionaler WSGI-Server (waitress/gunicorn via
       `wsgi.py`), GPIO-Cleanup, robustes GPIO-Backend (defekter Pin killt den
       Start nicht), Layout-Validierung, systemd-Autostart (`deploy/`).
+- [x] **Fehler behoben:** `app/main.py` erzeugte auf Modulebene eine App. Dadurch
+      belegte bereits der Import in `run.py` alle GPIO-Pins; die eigentliche App
+      bekam keinen Pin mehr und meldete stumm nur "frei". Kein App-Objekt mehr
+      auf Modulebene, zwei Regressionstests in `tests/test_production.py`.
+- [x] Inbetriebnahme-Werkzeuge: Diagnose-Seite `/diag` (Rohpegel, Wechselzaehler,
+      Pin-Suche, invert umschalten), `GET /api/diagnostics`, `POST /api/diag/scan`,
+      `POST /api/diag/assign/<id>` (nur mit `ANNA_DIAG=1`), CLI
+      `scripts/gpio_check.py`. Doku: `docs/Sensor-Inbetriebnahme.md`.
+- [x] Pin-Nummerierung: `settings.numbering` = `bcm` (Standard) oder `board`,
+      Umrechnung und Plausibilitaetspruefung in `app/pins.py`. Damit ist die
+      Verwechslung BCM/Header-Pin ohne Umverdrahten korrigierbar.
+- [x] Beschaltung je Feld konfigurierbar: `pull_up` (true/false/null) und
+      `active_state` - deckt Reed, NPN und PNP sowie Modulplatinen ab.
 - [ ] `GpioSensorBackend` auf echter Hardware verifizieren (Pull-up, Entprellung,
-      ggf. `invert` je Feld). Logik (inkl. `invert`) und Ausfallsicherheit sind
-      per Fake-gpiozero-Test bereits abgesichert; finaler Test steht am echten Pi aus.
+      `invert` je Feld). Logik, Beschaltungsvarianten und Ausfallsicherheit sind
+      per gpiozero-Nachbau abgesichert; finaler Test steht am echten Pi aus.
+- [x] Entprellung auf Fachebene (`app/stability.py`): Ein Zustandswechsel muss
+      `settings.confirmations` Mal hintereinander gemessen werden (gewaehlt: 2,
+      also rund 3 s bei 1,5 s Intervall). Verhindert Flackern, wenn ein Auto am
+      Rand des Erfassungsbereichs steht. Wirkt nur auf echte Sensoren; die
+      Diagnose bleibt bewusst ungefiltert.
 - [x] Live-Updates per Server-Sent-Events (`GET /api/stream`, additiv).
 - [x] AP 5.3 teilweise: Reservierung (`/api/reserve/...`) und
       Statistik/Auslastung (`/api/stats`) umgesetzt. Schranke als Aktor offen.

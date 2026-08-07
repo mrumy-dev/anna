@@ -10,19 +10,33 @@ Reed-Schaltern – nur über eine Umgebungsvariable umgeschaltet.
 
 ## Installation & Start
 
-```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+**`python run.py` ist der Echtbetrieb.** Die Web-App zeigt dann ausschliesslich,
+was die Sensoren am Modellparkplatz melden – grün = frei, rot = belegt. Von Hand
+lässt sich daran nichts ändern; die Simulationsbefehle antworten mit HTTP 403.
 
-python run.py                    # Simulator -> http://localhost:5000
+```bash
+# Auf dem Raspberry Pi
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-pi.txt    # gpiozero + lgpio (fuer den Echtbetrieb)
+
+python run.py                          # -> http://<IP-des-Pi>:5000
 ```
 
-Im Simulationsmodus kannst du im Browser auf ein Parkfeld tippen, um es belegt/frei
-zu schalten, oder „Zufaellig setzen" verwenden – ideal für eine Vorführung ohne
-Hardware. `run.py` startet mit **Debug aus** und **threaded** (mehrere Besucher +
+Fehlt `gpiozero`, startet das Backend **nicht** und sagt im Klartext, was zu tun
+ist – es zeigt niemals ersatzweise erfundene Daten.
+
+Zum Entwickeln ohne Hardware muss der Simulator **ausdrücklich** angefordert
+werden (dann erscheint ein unübersehbares rotes Banner in der App):
+
+```bash
+ANNA_BACKEND=simulated python run.py
+```
+
+`run.py` startet mit **Debug aus** und **threaded** (mehrere Besucher +
 Live-Updates gleichzeitig). Auf macOS ist Port 5000 oft belegt – dann
-`ANNA_PORT=5050 python run.py`.
+`ANNA_PORT=5050 …`.
 
 ### Umgebungsvariablen
 
@@ -30,10 +44,29 @@ Live-Updates gleichzeitig). Auf macOS ist Port 5000 oft belegt – dann
 |---|---|---|
 | `ANNA_HOST` | `0.0.0.0` | Bind-Adresse (im WLAN erreichbar) |
 | `ANNA_PORT` | `5000` | Port |
-| `ANNA_BACKEND` | `simulated` | `simulated` oder `gpio` |
+| `ANNA_BACKEND` | **`gpio`** | `gpio` = Echtbetrieb, `simulated` = ohne Hardware |
 | `ANNA_DEBUG` | `0` | `1` = Debug-Modus (nur Entwicklung) |
 | `ANNA_SERVER` | `werkzeug` | `werkzeug` (threaded) oder `waitress` |
 | `ANNA_THREADS` | `8` | Threads bei `waitress` |
+| `ANNA_STRICT` | `0` | `1` = Start abbrechen, wenn im `gpio`-Modus kein Sensor läuft |
+| `ANNA_DIAG` | `0` | `1` = Pin-Zuordnung über `/diag` änderbar (nur zum Einrichten) |
+
+### Läuft wirklich die echte Hardware?
+
+Damit eine Vorführung nie versehentlich mit erfundenen Daten läuft, zeigt die
+App die Betriebsart selbst an: grünes **LIVE**-Abzeichen bei echten Sensoren,
+rotes **SIMULATION**-Abzeichen plus unübersehbares Banner (inkl. Rechnername)
+im Simulationsmodus. Prüfen lässt es sich auch direkt:
+
+```bash
+curl http://<IP-des-Pi>:5000/api/health
+# {"status":"ok","mode":"gpio","live":true,"host":"raspberrypi","sensors_ok":7,...}
+```
+
+`ANNA_STRICT=1` (im systemd-Dienst voreingestellt) bricht den Start ab, wenn der
+`gpio`-Modus verlangt ist, aber kein einziger Sensor geöffnet werden konnte –
+besser ein Dienst, der sichtbar nicht startet, als eine App, die überzeugend
+aussieht und nichts misst.
 
 ### Produktiver WSGI-Server (optional)
 
@@ -68,14 +101,44 @@ Manuell geht es auch:
 ```bash
 pip install -r requirements.txt
 pip install -r requirements-pi.txt     # gpiozero + lgpio (nur auf dem Pi)
-ANNA_BACKEND=gpio python run.py
+python run.py                          # Echtbetrieb ist der Standard
 ```
 
 Die echten GPIO-Pins werden aus `config/parking_layout.json` gelesen. Diese Datei
-ist die Schnittstelle zu Elektro: dort steht, welches Parkfeld an welchem Pin hängt
-(BCM-Nummerierung). Verdrahtung je Sensor: Reed-Schalter zwischen GPIO und GND. Ein
-fehlender oder defekter Pin bricht den Start **nicht** ab (das Feld bleibt „frei"),
-sondern wird nur im Log gemeldet.
+ist die Schnittstelle zu Elektro: dort steht, welches Parkfeld an welchem Pin hängt.
+Verdrahtung je Sensor: Reed-Schalter zwischen GPIO und GND. Ein fehlender oder
+defekter Pin bricht den Start **nicht** ab (das Feld bleibt „frei"), sondern wird
+nur im Log gemeldet.
+
+> **Wichtig – zwei Zählweisen:** `gpiozero` versteht Zahlen immer als **BCM**
+> (GPIO17 sitzt auf Header-Pin 11). Wer die Pins auf der Steckerleiste abzählt,
+> meint die **physische** Nummer – dann in den `settings`
+> `"numbering": "board"` setzen. Sonst liest die Software andere Pins, als
+> verdrahtet sind. Details: `docs/Sensor-Inbetriebnahme.md`.
+
+### Sensoren prüfen (Inbetriebnahme)
+
+Registriert die App ein belegtes Feld nicht, zeigt die **Diagnose-Seite** sofort,
+woran es liegt – sie stellt den *rohen* Pegel neben die Auswertung:
+
+```
+http://<IP-des-Pi>:5000/diag
+```
+
+Entscheidend ist die Spalte **Wechsel**: Stellt man ein Auto auf ein Feld und
+zählt sie nicht hoch, kommt das Signal gar nicht am Pi an (Verdrahtung, Pin-Nummer
+oder Sensortyp). Zählt sie hoch, ist nur die Auswertung verdreht → `invert`.
+
+Ohne Browser geht es auch direkt am Pi:
+
+```bash
+python scripts/gpio_check.py            # Live-Tabelle aller Felder
+python scripts/gpio_check.py --scan     # findet den tatsächlich verdrahteten Pin
+python scripts/gpio_check.py --pinout   # Tabelle BCM <-> Header-Pin
+```
+
+Zum Korrigieren der Zuordnung direkt aus dem Browser das Backend mit
+`ANNA_DIAG=1` starten (Schreibzugriff; für die Vorführung wieder entfernen).
 
 Dienst verwalten:
 
@@ -90,9 +153,22 @@ Die Vorlage `deploy/anna.service` liegt im Repo (Pfade/Benutzer ggf. anpassen).
 ## Konfiguration
 
 Alles Modellspezifische steht in `config/parking_layout.json`: Areale, Parkfelder,
-Typen (`normal`/`family`/`women`/`disabled`), GPIO-Pins und Einstellungen
-(`poll_interval_ms`, `bounce_time_s`, `default_invert`). Mehr Felder oder andere
-Pins = nur diese Datei ändern, kein Code-Eingriff.
+Typen (`normal`/`family`/`women`/`disabled`), GPIO-Pins und die Einstellungen.
+Mehr Felder oder andere Pins = nur diese Datei ändern, kein Code-Eingriff.
+
+| Einstellung | Standard | Bedeutung |
+|---|---|---|
+| `poll_interval_ms` | `1500` | Abfrageintervall der Web-App |
+| `bounce_time_s` | `0.05` | elektrische Entprellung in `gpiozero` |
+| `confirmations` | `2` | wie oft ein neuer Zustand bestätigt sein muss, bevor die App ihn zeigt (verhindert Flackern; `1` schaltet die Glättung ab) |
+| `numbering` | `bcm` | `bcm` = GPIO-Nummer, `board` = physischer Header-Pin |
+| `default_invert` | `false` | belegt/frei vertauscht |
+| `default_pull_up` | `true` | interner Widerstand (siehe Sensortypen) |
+| `show_reservations` | `false` | `false` = reine Anzeige ohne Bedienelemente; `true` blendet je freiem Feld einen Reservieren-Knopf ein |
+
+Die Glättung wirkt nur auf echte Sensoren – im Simulator schaltet eine
+angetippte Kachel weiterhin sofort um. Die Diagnose-Seite `/diag` zeigt
+absichtlich den **ungeglätteten** Sensorwert.
 
 ## Architektur in einem Satz
 

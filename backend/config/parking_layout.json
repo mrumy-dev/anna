@@ -1,9 +1,17 @@
 {
-  "_comment": "Zentrale Konfiguration des Modellparkplatzes ANNA. Diese Datei ist zugleich die SCHNITTSTELLE ZU ELEKTRO: hier wird festgehalten, welches Parkfeld an welchem GPIO-Pin (BCM-Nummerierung) des Raspberry Pi haengt. Elektro traegt die tatsaechlichen Pins ein, sobald die Verkabelung steht. Feldtypen: normal | family | women | disabled. 'invert': true, falls ein Sensor verkehrt herum verdrahtet ist (belegt/frei vertauscht).",
+  "_comment": "Zentrale Konfiguration des Modellparkplatzes ANNA. Diese Datei ist zugleich die SCHNITTSTELLE ZU ELEKTRO. Feldtypen: normal | family | women | disabled.",
+  "_numbering": "WICHTIG: 'numbering' legt fest, wie 'gpio_pin' zu lesen ist. 'bcm' = GPIO-Nummer (GPIO17 sitzt auf Header-Pin 11). 'board' = physische Nummer auf der Steckerleiste (Pin 11 ist GPIO17). Wer die Zahlen auf dem Header abzaehlt, muss 'board' setzen - sonst liest die Software voellig andere Pins als verdrahtet sind.",
+  "_wiring": "'pull_up': true = Reed-/Schliesskontakt zwischen GPIO und GND (Standard). false = Sensor legt bei Belegung aktiv HIGH an (z. B. PNP-Naeherungsschalter). null = kein interner Widerstand, dann zusaetzlich 'active_state' (true/false) angeben. 'invert': true dreht belegt/frei um, falls der Sensor genau verkehrt herum meldet.",
+  "_stability": "'confirmations': Wie oft ein abweichender Messwert hintereinander auftreten muss, bevor die Anzeige umschaltet. Verhindert Flackern, wenn ein Auto am Rand des Erfassungsbereichs steht. 2 bedeutet bei 1500 ms Abfrageintervall rund 3 s Verzoegerung. 1 schaltet die Glaettung ab. Gilt nur fuer echte Sensoren, nicht im Simulator.",
+  "_display": "'show_reservations': false = die Seite ist eine reine Anzeige, an der sich von Hand nichts veraendern laesst (Empfehlung fuer die Vorfuehrung). true blendet je freiem Feld einen Knopf zum Reservieren ein; die API-Endpunkte /api/reserve funktionieren unabhaengig davon immer.",
   "settings": {
     "poll_interval_ms": 1500,
     "bounce_time_s": 0.05,
-    "default_invert": false
+    "confirmations": 2,
+    "numbering": "bcm",
+    "default_invert": false,
+    "default_pull_up": true,
+    "show_reservations": false
   },
   "areas": [
     {
@@ -11,10 +19,10 @@
       "name": "Parkplatz Blumenstrasse",
       "maps_url": "https://www.google.com/maps/search/?api=1&query=Parkplatz+Blumenstrasse",
       "spaces": [
-        { "id": "B1", "type": "normal",   "gpio_pin": 17 },
-        { "id": "B2", "type": "family",   "gpio_pin": 27 },
-        { "id": "B3", "type": "women",    "gpio_pin": 22 },
-        { "id": "B4", "type": "disabled", "gpio_pin": 23 }
+        { "id": "B1", "type": "normal",   "gpio_pin": 17, "invert": false, "pull_up": true },
+        { "id": "B2", "type": "family",   "gpio_pin": 27, "invert": false, "pull_up": true },
+        { "id": "B3", "type": "women",    "gpio_pin": 22, "invert": false, "pull_up": true },
+        { "id": "B4", "type": "disabled", "gpio_pin": 23, "invert": false, "pull_up": true }
       ]
     },
     {
@@ -22,9 +30,9 @@
       "name": "Parkplatz Hauptstrasse",
       "maps_url": "https://www.google.com/maps/search/?api=1&query=Parkplatz+Hauptstrasse",
       "spaces": [
-        { "id": "H1", "type": "normal", "gpio_pin": 24 },
-        { "id": "H2", "type": "normal", "gpio_pin": 25 },
-        { "id": "H3", "type": "family", "gpio_pin": 5  }
+        { "id": "H1", "type": "normal", "gpio_pin": 24, "invert": false, "pull_up": true },
+        { "id": "H2", "type": "normal", "gpio_pin": 25, "invert": false, "pull_up": true },
+        { "id": "H3", "type": "family", "gpio_pin": 5,  "invert": false, "pull_up": true }
       ]
     }
   ]
