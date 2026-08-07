@@ -39,8 +39,18 @@ class Space:
 
     id: str
     type: SpaceType
+    # gpio_pin ist IMMER die aufgeloeste BCM-Nummer (siehe app/pins.py).
     gpio_pin: int | None = None
+    # So stand die Nummer in der Konfiguration - nur fuer die Diagnose-Anzeige,
+    # damit man Konfigurationswert und tatsaechlich gelesenen Pin vergleichen kann.
+    configured_pin: int | None = None
     invert: bool = False
+    # Interner Widerstand des Pi:
+    #   True  -> Pull-up  (Reed-Schalter gegen GND; Standard)
+    #   False -> Pull-down (Sensor zieht bei Belegung aktiv auf HIGH, z. B. PNP)
+    #   None  -> kein interner Widerstand (externe Beschaltung), active_state noetig
+    pull_up: bool | None = True
+    active_state: bool | None = None
     occupied: bool = False
     # Reservierung ist eine additive Funktion (AP 5.3). Sie wird bewusst NICHT
     # in to_dict() ausgegeben, damit der /api/state-Vertrag unveraendert bleibt;

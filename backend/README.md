@@ -72,10 +72,40 @@ ANNA_BACKEND=gpio python run.py
 ```
 
 Die echten GPIO-Pins werden aus `config/parking_layout.json` gelesen. Diese Datei
-ist die Schnittstelle zu Elektro: dort steht, welches Parkfeld an welchem Pin hängt
-(BCM-Nummerierung). Verdrahtung je Sensor: Reed-Schalter zwischen GPIO und GND. Ein
-fehlender oder defekter Pin bricht den Start **nicht** ab (das Feld bleibt „frei"),
-sondern wird nur im Log gemeldet.
+ist die Schnittstelle zu Elektro: dort steht, welches Parkfeld an welchem Pin hängt.
+Verdrahtung je Sensor: Reed-Schalter zwischen GPIO und GND. Ein fehlender oder
+defekter Pin bricht den Start **nicht** ab (das Feld bleibt „frei"), sondern wird
+nur im Log gemeldet.
+
+> **Wichtig – zwei Zählweisen:** `gpiozero` versteht Zahlen immer als **BCM**
+> (GPIO17 sitzt auf Header-Pin 11). Wer die Pins auf der Steckerleiste abzählt,
+> meint die **physische** Nummer – dann in den `settings`
+> `"numbering": "board"` setzen. Sonst liest die Software andere Pins, als
+> verdrahtet sind. Details: `docs/Sensor-Inbetriebnahme.md`.
+
+### Sensoren prüfen (Inbetriebnahme)
+
+Registriert die App ein belegtes Feld nicht, zeigt die **Diagnose-Seite** sofort,
+woran es liegt – sie stellt den *rohen* Pegel neben die Auswertung:
+
+```
+http://<IP-des-Pi>:5000/diag
+```
+
+Entscheidend ist die Spalte **Wechsel**: Stellt man ein Auto auf ein Feld und
+zählt sie nicht hoch, kommt das Signal gar nicht am Pi an (Verdrahtung, Pin-Nummer
+oder Sensortyp). Zählt sie hoch, ist nur die Auswertung verdreht → `invert`.
+
+Ohne Browser geht es auch direkt am Pi:
+
+```bash
+python scripts/gpio_check.py            # Live-Tabelle aller Felder
+python scripts/gpio_check.py --scan     # findet den tatsächlich verdrahteten Pin
+python scripts/gpio_check.py --pinout   # Tabelle BCM <-> Header-Pin
+```
+
+Zum Korrigieren der Zuordnung direkt aus dem Browser das Backend mit
+`ANNA_DIAG=1` starten (Schreibzugriff; für die Vorführung wieder entfernen).
 
 Dienst verwalten:
 

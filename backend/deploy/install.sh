@@ -40,6 +40,7 @@ WorkingDirectory=$BACKEND_DIR
 Environment=ANNA_BACKEND=gpio
 Environment=ANNA_HOST=0.0.0.0
 Environment=ANNA_PORT=5000
+Environment=ANNA_DIAG=1
 ExecStart=$BACKEND_DIR/.venv/bin/python run.py
 Restart=on-failure
 RestartSec=3
@@ -56,3 +57,5 @@ echo
 echo "Fertig. Die Web-App laeuft auf http://<IP-des-Pi>:5000"
 echo "Status:   sudo systemctl status anna"
 echo "Logs:     journalctl -u anna -f"
+echo "Diagnose: http://<IP-des-Pi>:5000/diag   (Sensoren pruefen)"
+echo "Terminal: $BACKEND_DIR/.venv/bin/python scripts/gpio_check.py"

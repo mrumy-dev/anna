@@ -12,6 +12,22 @@ from .base import SensorBackend
 from .simulated import SimulatedSensorBackend
 
 
+def wiring_specs(system: ParkingSystem) -> list[dict]:
+    """Uebersetzt das Domaenenmodell in die Beschaltungsangaben je Parkfeld."""
+    return [
+        {
+            "id": s.id,
+            "pin": s.gpio_pin,
+            "configured_pin": s.configured_pin,
+            "invert": s.invert,
+            "pull_up": s.pull_up,
+            "active_state": s.active_state,
+        }
+        for a in system.areas
+        for s in a.spaces
+    ]
+
+
 def create_backend(name: str, system: ParkingSystem,
                    bounce_time: float = 0.05) -> SensorBackend:
     name = (name or "simulated").lower()
@@ -19,12 +35,15 @@ def create_backend(name: str, system: ParkingSystem,
     if name == "gpio":
         from .gpio import GpioSensorBackend
 
-        pin_map = {s.id: s.gpio_pin for a in system.areas for s in a.spaces}
-        invert_map = {s.id: s.invert for a in system.areas for s in a.spaces}
-        return GpioSensorBackend(pin_map, invert_map, bounce_time=bounce_time)
+        return GpioSensorBackend(wiring_specs(system), bounce_time=bounce_time)
 
     # Default / Entwicklung
     return SimulatedSensorBackend(system.space_ids)
 
 
-__all__ = ["SensorBackend", "SimulatedSensorBackend", "create_backend"]
+__all__ = [
+    "SensorBackend",
+    "SimulatedSensorBackend",
+    "create_backend",
+    "wiring_specs",
+]

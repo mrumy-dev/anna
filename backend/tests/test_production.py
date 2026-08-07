@@ -28,6 +28,47 @@ def test_wsgi_application_serves_api():
     assert state["total"] == 7
 
 
+# --- Regression: Import darf keine App (und keine GPIO-Pins) erzeugen ------
+def test_importing_main_creates_no_app():
+    """Fruehere Fehlerquelle: `app = create_app()` auf Modulebene.
+
+    Dadurch hat schon `from app import create_app` in run.py saemtliche
+    GPIO-Pins belegt; die danach regulaer erzeugte App bekam keinen Pin mehr
+    und alle Parkfelder blieben stumm auf "frei" stehen.
+    """
+    import app.main as main_module
+
+    assert not hasattr(main_module, "app"), (
+        "app/main.py darf keine App auf Modulebene erzeugen - sonst belegt "
+        "bereits der Import die GPIO-Pins."
+    )
+
+
+def test_gpio_startup_like_run_py_gets_all_sensors(fake_gpio):
+    """Startet wie run.py und prueft, dass WIRKLICH alle Sensoren aktiv sind.
+
+    Genau dieser Test haette den Ausfall auf dem Raspberry Pi aufgedeckt:
+    vorher meldete jedes Feld 'GPIO.. is already in use'.
+    """
+    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+
+    from app import create_app  # genau der Import aus run.py
+    from app.sensors import wiring_specs
+    from app.sensors.gpio import GpioSensorBackend
+
+    application = create_app(
+        backend_factory=lambda system, settings: GpioSensorBackend(
+            wiring_specs(system)
+        )
+    )
+    application.testing = True
+
+    rows = application.test_client().get("/api/diagnostics").get_json()["spaces"]
+    assert len(rows) == 7
+    broken = [r["space_id"] for r in rows if not r["ok"]]
+    assert not broken, f"Diese Felder haben keinen Sensor bekommen: {broken}"
+
+
 # --- Layout-Validierung ----------------------------------------------------
 def test_load_layout_missing_file(tmp_path):
     from app.config import load_layout
@@ -65,32 +106,23 @@ def test_load_layout_empty_areas(tmp_path):
 
 
 # --- GPIO-Backend bleibt bei einem defekten Pin robust ---------------------
-def test_gpio_backend_survives_bad_pin(monkeypatch):
-    fake = types.ModuleType("gpiozero")
-
-    class FakeButton:
-        def __init__(self, pin, pull_up=True, bounce_time=None):
-            if pin == 27:
-                raise RuntimeError("Pin 27 belegt")  # ein Pin faellt aus
-            self.pin = pin
-
-        @property
-        def is_pressed(self) -> bool:
-            return False
-
-        def close(self) -> None:
-            pass
-
-    fake.Button = FakeButton
-    monkeypatch.setitem(sys.modules, "gpiozero", fake)
+def test_gpio_backend_survives_bad_pin(fake_gpio):
+    fake_gpio(fail_pins=(27,))  # ein Pin laesst sich nicht oeffnen
 
     from app.sensors.gpio import GpioSensorBackend
 
-    backend = GpioSensorBackend(
-        pin_map={"A": 17, "B": 27, "C": 5},
-        invert_map={},
-    )
+    backend = GpioSensorBackend([
+        {"id": "A", "pin": 17},
+        {"id": "B", "pin": 27},
+        {"id": "C", "pin": 5},
+    ])
     readings = backend.read_all()
 
     # A und C funktionieren, B (Pin 27) wurde uebersprungen statt zu crashen.
     assert set(readings.keys()) == {"A", "C"}
+
+    # Die Diagnose zeigt das defekte Feld weiterhin an - mit Fehlertext.
+    rows = {r["space_id"]: r for r in backend.diagnostics()}
+    assert rows["B"]["ok"] is False
+    assert rows["B"]["error"]
+    assert rows["A"]["ok"] is True

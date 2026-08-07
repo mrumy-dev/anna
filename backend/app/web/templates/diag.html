@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ANNA – Sensor-Diagnose</title>
+  <meta name="theme-color" content="#16314f" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='diag.css') }}" />
+</head>
+<body data-write="{{ 1 if diag_write else 0 }}">
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-icon" src="{{ url_for('static', filename='icon.svg') }}" alt="" width="36" height="36" />
+      <div class="brand-text">
+        <span class="brand-mark">ANNA</span>
+        <span class="brand-sub">Sensor-Diagnose</span>
+      </div>
+    </div>
+    <div class="status">
+      <span id="mode-badge" class="badge">–</span>
+      <a class="link-btn" href="/">Zur App</a>
+    </div>
+  </header>
+
+  <main>
+    <p id="sim-warning" class="warn warn-strong" hidden>
+      <strong>Achtung: Das Backend läuft im Simulationsmodus.</strong>
+      Hier siehst du <em>nicht</em> die echten Sensoren. Für die Hardware-Prüfung
+      muss das Backend mit <code>ANNA_BACKEND=gpio</code> gestartet werden.
+    </p>
+
+    <section class="panel">
+      <h2 class="panel-title">So findest du den Fehler</h2>
+      <ol class="howto">
+        <li>Ein Auto auf ein Feld stellen und wieder wegnehmen – dabei die Spalte
+          <strong>Wechsel</strong> beobachten.</li>
+        <li><strong>Wechsel bleibt 0</strong> → das Signal kommt gar nicht am Pi an:
+          Verdrahtung, Pin-Nummer oder Sensor. Nutze die <strong>Pin-Suche</strong>.</li>
+        <li><strong>Wechsel zählt hoch, aber Belegt/Frei ist vertauscht</strong> →
+          nur die Auswertung stimmt nicht: <strong>invert</strong> umschalten.</li>
+      </ol>
+      <p class="meta-line">
+        Layout: <code id="layout-file">–</code> ·
+        Nummerierung: <code id="numbering">–</code> ·
+        Schreibzugriff: <code id="write-state">–</code>
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Parkfelder</h2>
+        <span id="updated" class="meta-line">–</span>
+      </div>
+      <div class="table-scroll">
+        <table class="diag-table">
+          <thead>
+            <tr>
+              <th>Feld</th>
+              <th>Pin</th>
+              <th>Rohpegel</th>
+              <th>Auswertung</th>
+              <th>Wechsel</th>
+              <th>Beschaltung</th>
+              <th>Aktion</th>
+            </tr>
+          </thead>
+          <tbody id="diag-rows">
+            <tr><td colspan="7" class="muted">Lade …</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Pin-Suche</h2>
+        <button id="scan-btn" class="btn" type="button">Suche starten (6 s)</button>
+      </div>
+      <p class="meta-line">
+        Startet die Suche und stellt <strong>während der Laufzeit</strong> ein Auto auf das
+        gesuchte Feld (oder nimmt es weg). Der Pin, dessen Pegel wechselt, ist der
+        tatsächlich verdrahtete Pin dieses Feldes.
+      </p>
+      <div id="scan-result"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    PoE-Projekt ANNA · Teilprojekt Informatik · HFTM
+  </footer>
+
+  <script src="{{ url_for('static', filename='diag.js') }}"></script>
+</body>
+</html>

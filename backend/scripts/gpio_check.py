@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""Sensor-Diagnose fuer die Kommandozeile (Raspberry Pi).
+
+Prueft die Verdrahtung unabhaengig vom Webserver. Aufruf aus dem Ordner
+backend/ mit aktiviertem venv:
+
+    python scripts/gpio_check.py            # Live-Tabelle der konfigurierten Felder
+    python scripts/gpio_check.py --scan     # ALLE brauchbaren Pins beobachten
+    python scripts/gpio_check.py --pinout   # Header-Tabelle BCM <-> physischer Pin
+
+Leitfrage: Aendert sich der Rohpegel, wenn ein Auto auf das Feld gestellt wird?
+  - Spalte "Wechsel" bleibt 0  -> Signal kommt nicht an (Verdrahtung/Pin/Sensor)
+  - Wechsel zaehlt, Auswertung verkehrt -> nur 'invert' in der Konfiguration drehen
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+# Projektwurzel in den Suchpfad, damit 'app' importierbar ist.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app import pins as pinmap  # noqa: E402
+from app.config import load_layout  # noqa: E402
+from app.sensors import wiring_specs  # noqa: E402
+
+
+def print_pinout() -> None:
+    print("BCM  Header  Hinweis")
+    print("---  ------  ------------------------------------------------")
+    for bcm, board in sorted(pinmap.BCM_TO_BOARD.items()):
+        note = pinmap.BCM_NOTES.get(bcm, "")
+        safe = "" if bcm in pinmap.SAFE_BCM_PINS else "  (fuer Sensoren meiden)"
+        print(f"{bcm:>3}  {board:>6}  {note}{safe}")
+    print("\nNicht aufgefuehrte Header-Pins sind 3V3, 5V oder GND.")
+
+
+def live_table(interval: float) -> None:
+    system, settings = load_layout()
+    specs = wiring_specs(system)
+    numbering = settings.get("numbering", "bcm")
+
+    try:
+        from app.sensors.gpio import GpioSensorBackend
+    except ImportError as exc:  # pragma: no cover - nur ohne gpiozero
+        print(f"gpiozero fehlt: {exc}")
+        print("Installieren mit: pip install -r requirements-pi.txt")
+        return
+
+    print(f"Layout-Nummerierung: {numbering}")
+    for spec in specs:
+        if spec["pin"] is None:
+            print(f"  {spec['id']}: kein Pin konfiguriert")
+            continue
+        hint = pinmap.board_confusion_hint(spec.get("configured_pin"))
+        print(f"  {spec['id']}: konfiguriert {spec.get('configured_pin')} "
+              f"-> {pinmap.describe_pin(spec['pin'])}")
+        if hint:
+            print(f"      {hint}")
+
+    backend = GpioSensorBackend(specs, bounce_time=settings.get("bounce_time_s", 0.05))
+    print("\nJetzt ein Auto auf ein Feld stellen und wieder wegnehmen.")
+    print("Beenden mit Ctrl+C.\n")
+
+    try:
+        while True:
+            rows = backend.diagnostics()
+            print("\033[H\033[J", end="")  # Bildschirm loeschen
+            print(f"{'Feld':<6}{'Pin':<10}{'Roh':<8}{'Auswertung':<12}"
+                  f"{'Wechsel':<9}{'Status'}")
+            print("-" * 64)
+            for row in rows:
+                pin = f"GPIO{row['pin']}" if row["pin"] is not None else "-"
+                raw = {1: "HIGH", 0: "LOW"}.get(row["raw"], "-")
+                verdict = "BELEGT" if row["occupied"] else "frei"
+                status = "ok" if row["ok"] else f"FEHLER: {row['error']}"
+                print(f"{row['space_id']:<6}{pin:<10}{raw:<8}{verdict:<12}"
+                      f"{row['changes']:<9}{status}")
+            print("\n(Wechsel bleibt 0 -> Signal kommt nicht am Pi an)")
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\nBeendet.")
+    finally:
+        backend.close()
+
+
+def scan(seconds: float) -> None:
+    system, settings = load_layout()
+    try:
+        from app.sensors.gpio import GpioSensorBackend
+    except ImportError as exc:  # pragma: no cover
+        print(f"gpiozero fehlt: {exc}")
+        return
+
+    backend = GpioSensorBackend(wiring_specs(system),
+                                bounce_time=settings.get("bounce_time_s", 0.05))
+    print(f"Beobachte alle brauchbaren GPIO-Pins fuer {seconds:.0f} s.")
+    print("JETZT ein Auto auf das gesuchte Feld stellen oder wegnehmen ...\n")
+    try:
+        rows = backend.scan(seconds)
+    finally:
+        backend.close()
+
+    moved = [r for r in rows if r["changes"]]
+    if not moved:
+        print("Kein Pin hat sich bewegt.")
+        print("-> Verdrahtung, gemeinsame Masse (GND) oder Sensortyp pruefen.")
+        return
+
+    print(f"{'Pin':<10}{'Header':<9}{'Wechsel':<9}{'Von->Nach':<12}{'Feld'}")
+    print("-" * 52)
+    for row in moved:
+        print(f"GPIO{row['pin']:<6}{row['board_pin'] or '?':<9}{row['changes']:<9}"
+              f"{row['start']}->{row['end']:<9}{row['assigned_to'] or '(frei)'}")
+    print("\nDiesen Pin in config/parking_layout.json beim passenden Feld eintragen.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="ANNA Sensor-Diagnose")
+    parser.add_argument("--scan", action="store_true",
+                        help="alle brauchbaren Pins beobachten (Pin-Suche)")
+    parser.add_argument("--pinout", action="store_true",
+                        help="Header-Tabelle BCM <-> physischer Pin ausgeben")
+    parser.add_argument("--seconds", type=float, default=8.0,
+                        help="Dauer der Pin-Suche (Standard 8)")
+    parser.add_argument("--interval", type=float, default=0.5,
+                        help="Aktualisierung der Live-Tabelle (Standard 0.5 s)")
+    args = parser.parse_args()
+
+    if args.pinout:
+        print_pinout()
+    elif args.scan:
+        scan(args.seconds)
+    else:
+        live_table(args.interval)
+
+
+if __name__ == "__main__":
+    main()

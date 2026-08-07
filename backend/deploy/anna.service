@@ -11,6 +11,9 @@ WorkingDirectory=/home/pi/anna/backend
 Environment=ANNA_BACKEND=gpio
 Environment=ANNA_HOST=0.0.0.0
 Environment=ANNA_PORT=5000
+# Waehrend der Inbetriebnahme der Sensoren: erlaubt das Korrigieren der
+# Pin-Zuordnung ueber die Diagnose-Seite /diag. Fuer die Vorfuehrung entfernen.
+Environment=ANNA_DIAG=1
 # Standard-Server (threaded) ist bei mehreren gleichzeitigen Besuchern und
 # Server-Sent-Events robust. Fuer einen haerteren WSGI-Server stattdessen:
 #   Environment=ANNA_SERVER=waitress
