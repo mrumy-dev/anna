@@ -3,13 +3,15 @@
   "_numbering": "WICHTIG: 'numbering' legt fest, wie 'gpio_pin' zu lesen ist. 'bcm' = GPIO-Nummer (GPIO17 sitzt auf Header-Pin 11). 'board' = physische Nummer auf der Steckerleiste (Pin 11 ist GPIO17). Wer die Zahlen auf dem Header abzaehlt, muss 'board' setzen - sonst liest die Software voellig andere Pins als verdrahtet sind.",
   "_wiring": "'pull_up': true = Reed-/Schliesskontakt zwischen GPIO und GND (Standard). false = Sensor legt bei Belegung aktiv HIGH an (z. B. PNP-Naeherungsschalter). null = kein interner Widerstand, dann zusaetzlich 'active_state' (true/false) angeben. 'invert': true dreht belegt/frei um, falls der Sensor genau verkehrt herum meldet.",
   "_stability": "'confirmations': Wie oft ein abweichender Messwert hintereinander auftreten muss, bevor die Anzeige umschaltet. Verhindert Flackern, wenn ein Auto am Rand des Erfassungsbereichs steht. 2 bedeutet bei 1500 ms Abfrageintervall rund 3 s Verzoegerung. 1 schaltet die Glaettung ab. Gilt nur fuer echte Sensoren, nicht im Simulator.",
+  "_display": "'show_reservations': false = die Seite ist eine reine Anzeige, an der sich von Hand nichts veraendern laesst (Empfehlung fuer die Vorfuehrung). true blendet je freiem Feld einen Knopf zum Reservieren ein; die API-Endpunkte /api/reserve funktionieren unabhaengig davon immer.",
   "settings": {
     "poll_interval_ms": 1500,
     "bounce_time_s": 0.05,
     "confirmations": 2,
     "numbering": "bcm",
     "default_invert": false,
-    "default_pull_up": true
+    "default_pull_up": true,
+    "show_reservations": false
   },
   "areas": [
     {

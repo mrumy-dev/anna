@@ -164,6 +164,7 @@ Mehr Felder oder andere Pins = nur diese Datei ändern, kein Code-Eingriff.
 | `numbering` | `bcm` | `bcm` = GPIO-Nummer, `board` = physischer Header-Pin |
 | `default_invert` | `false` | belegt/frei vertauscht |
 | `default_pull_up` | `true` | interner Widerstand (siehe Sensortypen) |
+| `show_reservations` | `false` | `false` = reine Anzeige ohne Bedienelemente; `true` blendet je freiem Feld einen Reservieren-Knopf ein |
 
 Die Glättung wirkt nur auf echte Sensoren – im Simulator schaltet eine
 angetippte Kachel weiterhin sofort um. Die Diagnose-Seite `/diag` zeigt

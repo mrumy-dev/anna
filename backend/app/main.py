@@ -171,9 +171,13 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
     # --- Web-UI -----------------------------------------------------------
     @app.get("/")
     def index():
+        # Die Reservierungs-Knoepfe sind im Echtbetrieb standardmaessig aus:
+        # Die Seite ist dann eine reine Anzeige, an der sich von Hand nichts
+        # veraendern laesst. Einschalten ueber settings.show_reservations.
         return render_template(
             "index.html",
             poll_interval_ms=rt.settings.get("poll_interval_ms", 1500),
+            show_reservations=bool(rt.settings.get("show_reservations", False)),
         )
 
     @app.get("/diag")

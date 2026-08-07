@@ -445,6 +445,31 @@ def test_manual_manipulation_blocked_in_production(fake_gpio):
     assert client.post("/api/sim/randomize").status_code == 403
 
 
+def test_page_has_no_manual_controls_by_default():
+    """Standardmaessig ist die Seite eine reine Anzeige."""
+    app = create_app()
+    app.testing = True
+    html = app.test_client().get("/").get_data(as_text=True)
+    assert 'data-reservations="0"' in html
+
+
+def test_reservation_buttons_can_be_enabled(tmp_path, monkeypatch):
+    layout = {
+        "settings": {"poll_interval_ms": 1500, "show_reservations": True},
+        "areas": [{"id": "a", "name": "A", "spaces": [
+            {"id": "A1", "type": "normal"},
+        ]}],
+    }
+    path = tmp_path / "layout.json"
+    path.write_text(json.dumps(layout), encoding="utf-8")
+    monkeypatch.setenv("ANNA_LAYOUT", str(path))
+
+    app = create_app()
+    app.testing = True
+    html = app.test_client().get("/").get_data(as_text=True)
+    assert 'data-reservations="1"' in html
+
+
 # --- Betriebsart eindeutig erkennbar --------------------------------------
 def test_health_marks_simulation_as_not_live():
     """Die App muss beweisen koennen, dass sie NICHT simuliert."""

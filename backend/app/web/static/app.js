@@ -5,6 +5,10 @@
 "use strict";
 
 const POLL_MS = parseInt(document.body.dataset.poll || "1500", 10);
+// Im Echtbetrieb ist die Seite eine reine Anzeige: keine Bedienelemente, an
+// denen sich von Hand etwas veraendern liesse. Reservierung ist in
+// config/parking_layout.json ueber settings.show_reservations zuschaltbar.
+const SHOW_RESERVATIONS = document.body.dataset.reservations === "1";
 const TYPE_LABELS = {
   normal: "Normal",
   family: "Familie",
@@ -153,7 +157,7 @@ function renderSpace(space) {
     <span class="space-type">${TYPE_LABELS[space.type] || space.type}</span>`;
 
   // Reservierungs-Steuerung: freie Felder reservieren, reservierte freigeben.
-  if (!space.occupied) {
+  if (SHOW_RESERVATIONS && !space.occupied) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "resv-btn" + (reserved ? " cancel" : "");
@@ -339,10 +343,12 @@ function escapeHtml(s) {
 }
 
 // --- Start -----------------------------------------------------------------
-refreshReservations();
 startLive();
 refreshStats();
 refreshHealth();
-setInterval(refreshReservations, 4000);
 setInterval(refreshStats, 4000);
 setInterval(refreshHealth, 5000);
+if (SHOW_RESERVATIONS) {
+  refreshReservations();
+  setInterval(refreshReservations, 4000);
+}
