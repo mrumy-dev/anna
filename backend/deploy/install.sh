@@ -40,7 +40,6 @@ WorkingDirectory=$BACKEND_DIR
 Environment=ANNA_BACKEND=gpio
 Environment=ANNA_HOST=0.0.0.0
 Environment=ANNA_PORT=5000
-Environment=ANNA_STRICT=1
 Environment=ANNA_DIAG=1
 ExecStart=$BACKEND_DIR/.venv/bin/python run.py
 Restart=on-failure

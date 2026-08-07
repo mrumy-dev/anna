@@ -10,19 +10,33 @@ Reed-Schaltern – nur über eine Umgebungsvariable umgeschaltet.
 
 ## Installation & Start
 
-```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+**`python run.py` ist der Echtbetrieb.** Die Web-App zeigt dann ausschliesslich,
+was die Sensoren am Modellparkplatz melden – grün = frei, rot = belegt. Von Hand
+lässt sich daran nichts ändern; die Simulationsbefehle antworten mit HTTP 403.
 
-python run.py                    # Simulator -> http://localhost:5000
+```bash
+# Auf dem Raspberry Pi
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-pi.txt    # gpiozero + lgpio (fuer den Echtbetrieb)
+
+python run.py                          # -> http://<IP-des-Pi>:5000
 ```
 
-Im Simulationsmodus kannst du im Browser auf ein Parkfeld tippen, um es belegt/frei
-zu schalten, oder „Zufaellig setzen" verwenden – ideal für eine Vorführung ohne
-Hardware. `run.py` startet mit **Debug aus** und **threaded** (mehrere Besucher +
+Fehlt `gpiozero`, startet das Backend **nicht** und sagt im Klartext, was zu tun
+ist – es zeigt niemals ersatzweise erfundene Daten.
+
+Zum Entwickeln ohne Hardware muss der Simulator **ausdrücklich** angefordert
+werden (dann erscheint ein unübersehbares rotes Banner in der App):
+
+```bash
+ANNA_BACKEND=simulated python run.py
+```
+
+`run.py` startet mit **Debug aus** und **threaded** (mehrere Besucher +
 Live-Updates gleichzeitig). Auf macOS ist Port 5000 oft belegt – dann
-`ANNA_PORT=5050 python run.py`.
+`ANNA_PORT=5050 …`.
 
 ### Umgebungsvariablen
 
@@ -30,7 +44,7 @@ Live-Updates gleichzeitig). Auf macOS ist Port 5000 oft belegt – dann
 |---|---|---|
 | `ANNA_HOST` | `0.0.0.0` | Bind-Adresse (im WLAN erreichbar) |
 | `ANNA_PORT` | `5000` | Port |
-| `ANNA_BACKEND` | `simulated` | `simulated` oder `gpio` |
+| `ANNA_BACKEND` | **`gpio`** | `gpio` = Echtbetrieb, `simulated` = ohne Hardware |
 | `ANNA_DEBUG` | `0` | `1` = Debug-Modus (nur Entwicklung) |
 | `ANNA_SERVER` | `werkzeug` | `werkzeug` (threaded) oder `waitress` |
 | `ANNA_THREADS` | `8` | Threads bei `waitress` |
@@ -87,7 +101,7 @@ Manuell geht es auch:
 ```bash
 pip install -r requirements.txt
 pip install -r requirements-pi.txt     # gpiozero + lgpio (nur auf dem Pi)
-ANNA_BACKEND=gpio python run.py
+python run.py                          # Echtbetrieb ist der Standard
 ```
 
 Die echten GPIO-Pins werden aus `config/parking_layout.json` gelesen. Diese Datei
@@ -139,9 +153,21 @@ Die Vorlage `deploy/anna.service` liegt im Repo (Pfade/Benutzer ggf. anpassen).
 ## Konfiguration
 
 Alles Modellspezifische steht in `config/parking_layout.json`: Areale, Parkfelder,
-Typen (`normal`/`family`/`women`/`disabled`), GPIO-Pins und Einstellungen
-(`poll_interval_ms`, `bounce_time_s`, `default_invert`). Mehr Felder oder andere
-Pins = nur diese Datei ändern, kein Code-Eingriff.
+Typen (`normal`/`family`/`women`/`disabled`), GPIO-Pins und die Einstellungen.
+Mehr Felder oder andere Pins = nur diese Datei ändern, kein Code-Eingriff.
+
+| Einstellung | Standard | Bedeutung |
+|---|---|---|
+| `poll_interval_ms` | `1500` | Abfrageintervall der Web-App |
+| `bounce_time_s` | `0.05` | elektrische Entprellung in `gpiozero` |
+| `confirmations` | `2` | wie oft ein neuer Zustand bestätigt sein muss, bevor die App ihn zeigt (verhindert Flackern; `1` schaltet die Glättung ab) |
+| `numbering` | `bcm` | `bcm` = GPIO-Nummer, `board` = physischer Header-Pin |
+| `default_invert` | `false` | belegt/frei vertauscht |
+| `default_pull_up` | `true` | interner Widerstand (siehe Sensortypen) |
+
+Die Glättung wirkt nur auf echte Sensoren – im Simulator schaltet eine
+angetippte Kachel weiterhin sofort um. Die Diagnose-Seite `/diag` zeigt
+absichtlich den **ungeglätteten** Sensorwert.
 
 ## Architektur in einem Satz
 

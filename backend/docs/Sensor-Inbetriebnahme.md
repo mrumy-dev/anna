@@ -71,6 +71,13 @@ Die Diagnose-Seite zeigt deshalb zusaetzlich:
 | **Auswertung** | Was die Software daraus macht (beruecksichtigt `pull_up` und `invert`) |
 | **Wechsel** | **Wie oft sich der Pegel geaendert hat, seit das Backend laeuft** |
 
+> **Diagnose zeigt ungefiltert, die App geglaettet.** Die Park-App entprellt die
+> Sensorwerte (`settings.confirmations`, Standard 2): Ein Zustand wird erst
+> uebernommen, wenn er zweimal hintereinander gemessen wurde. Die Diagnose-Seite
+> umgeht das bewusst und zeigt den Sensor so, wie er wirklich ist. Weichen beide
+> fuer ein bis zwei Sekunden voneinander ab, ist das **kein Fehler**, sondern
+> genau diese Glaettung.
+
 Die Spalte **Wechsel** ist der Schluessel. Stelle ein Auto auf ein Feld und nimm
 es wieder weg:
 
@@ -83,24 +90,25 @@ es wieder weg:
 
 ## Schritt 1 – Laeuft ueberhaupt der GPIO-Modus?
 
-Der haeufigste Irrtum: Das Backend laeuft im **Simulationsmodus** und zeigt gar
-keine echten Sensoren an.
+Der Echtbetrieb ist der **Standard**: `python run.py` liest immer die echten
+Sensoren. Eine Simulation entsteht nur, wenn jemand sie ausdruecklich anfordert
+(`ANNA_BACKEND=simulated`). Trotzdem zuerst pruefen:
 
 ```bash
 curl http://localhost:5000/api/health
 ```
 
-- `{"status":"ok","mode":"gpio"}` → richtig, echte Sensoren.
-- `{"status":"ok","mode":"simulated"}` → **falsch**, es wird nichts gemessen.
+- `"live": true` und `"mode":"gpio"` → richtig, echte Sensoren.
+- `"live": false` → jemand hat den Simulator gesetzt, es wird nichts gemessen.
 
-Die Diagnose-Seite zeigt dasselbe oben rechts und blendet im Simulationsmodus
-eine rote Warnung ein. Umschalten:
+Wo die Einstellung herkommen kann:
 
 ```bash
-ANNA_BACKEND=gpio python run.py
-# als Dienst:
-sudo systemctl edit --full anna     # Environment=ANNA_BACKEND=gpio pruefen
+systemctl show anna -p Environment      # Dienst-Umgebung pruefen
+env | grep ANNA_                        # Umgebung der eigenen Shell
 ```
+
+`ANNA_BACKEND=simulated` entfernen, dann `sudo systemctl restart anna`.
 
 ## Schritt 2 – Melden sich alle Sensoren?
 

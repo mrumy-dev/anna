@@ -8,16 +8,18 @@ Type=simple
 # Benutzer und Pfade ggf. anpassen (install.sh setzt sie automatisch).
 User=pi
 WorkingDirectory=/home/pi/anna/backend
+# Echtbetrieb ist ohnehin der Standard - hier nur zur Klarstellung.
 Environment=ANNA_BACKEND=gpio
 Environment=ANNA_HOST=0.0.0.0
 Environment=ANNA_PORT=5000
-# Bricht den Start ab, wenn im gpio-Modus KEIN Sensor geoeffnet werden kann.
-# Besser ein Dienst, der sichtbar nicht startet, als eine Web-App, die
-# ueberzeugend aussieht und in Wirklichkeit nichts misst.
-Environment=ANNA_STRICT=1
 # Waehrend der Inbetriebnahme der Sensoren: erlaubt das Korrigieren der
 # Pin-Zuordnung ueber die Diagnose-Seite /diag. Fuer die Vorfuehrung entfernen.
 Environment=ANNA_DIAG=1
+# Optional fuer die Vorfuehrung: bricht den Start ab, wenn KEIN Sensor
+# geoeffnet werden kann. Waehrend der Inbetriebnahme bewusst AUS lassen -
+# sonst ist auch die Diagnose-Seite /diag nicht mehr erreichbar, mit der man
+# den Fehler suchen wuerde. Die App warnt in diesem Fall ohnehin unuebersehbar.
+#Environment=ANNA_STRICT=1
 # Standard-Server (threaded) ist bei mehreren gleichzeitigen Besuchern und
 # Server-Sent-Events robust. Fuer einen haerteren WSGI-Server stattdessen:
 #   Environment=ANNA_SERVER=waitress

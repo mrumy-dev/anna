@@ -21,6 +21,15 @@ from app.config import load_layout
 from app.main import create_app
 
 
+def _space(state: dict, space_id: str) -> dict:
+    """Ein Parkfeld aus der /api/state-Antwort herausgreifen."""
+    for area in state["areas"]:
+        for space in area["spaces"]:
+            if space["id"] == space_id:
+                return space
+    raise AssertionError(f"Parkfeld {space_id} nicht gefunden")
+
+
 # --- Pin-Nummerierung ------------------------------------------------------
 def test_resolve_bcm_is_identity():
     assert pinmap.resolve_pin(17, "bcm") == 17
@@ -390,6 +399,52 @@ def test_health_stays_ok_in_simulation():
     assert h["mode"] == "simulated"
 
 
+# --- localhost ist Produktion, nicht Simulation ---------------------------
+def test_production_default_backend_is_gpio(monkeypatch, fake_gpio):
+    """Ohne gesetzte Umgebungsvariable MUSS der Echtbetrieb laufen.
+
+    Wer die Seite aufruft, soll nie versehentlich eine Simulation sehen.
+    """
+    monkeypatch.delenv("ANNA_BACKEND", raising=False)
+    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+
+    app = create_app()
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+    assert h["mode"] == "gpio"
+    assert h["live"] is True
+
+
+def test_simulation_must_be_requested_explicitly(monkeypatch, fake_gpio):
+    monkeypatch.setenv("ANNA_BACKEND", "simulated")
+    app = create_app()
+    app.testing = True
+    assert app.test_client().get("/api/health").get_json()["mode"] == "simulated"
+
+
+def test_unknown_backend_name_is_rejected(monkeypatch):
+    monkeypatch.setenv("ANNA_BACKEND", "quatsch")
+    with pytest.raises(ValueError):
+        create_app()
+
+
+def test_manual_manipulation_blocked_in_production(fake_gpio):
+    """Im Echtbetrieb darf die Belegung nicht von Hand aenderbar sein."""
+    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+
+    def factory(system, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(system))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    client = app.test_client()
+
+    assert client.post("/api/sim/toggle/B1").status_code == 403
+    assert client.post("/api/sim/randomize").status_code == 403
+
+
 # --- Betriebsart eindeutig erkennbar --------------------------------------
 def test_health_marks_simulation_as_not_live():
     """Die App muss beweisen koennen, dass sie NICHT simuliert."""
@@ -466,6 +521,53 @@ def test_scan_marks_unsafe_pins(fake_gpio):
     rows = {r["pin"]: r for r in backend.scan(duration_s=0.3, interval_s=0.05)}
     assert rows[2]["safe"] is False and rows[2]["note"]    # I2C
     assert rows[6]["safe"] is True
+
+
+# --- Entprellung im Zusammenspiel mit der API -----------------------------
+def test_state_is_debounced_in_gpio_mode(gpio_app):
+    """Ein einzelner Ausreisser darf die Anzeige nicht umschalten."""
+    client, gpio = gpio_app
+    assert _space(client.get("/api/state").get_json(), "B1")["occupied"] is False
+
+    gpio.set_level(17, 0)          # Auto auf B1
+    # Erste Messung: noch nicht bestaetigt -> Anzeige bleibt "frei".
+    assert _space(client.get("/api/state").get_json(), "B1")["occupied"] is False
+    # Zweite Messung bestaetigt -> jetzt umschalten.
+    assert _space(client.get("/api/state").get_json(), "B1")["occupied"] is True
+
+
+def test_flapping_sensor_does_not_flicker(gpio_app):
+    client, gpio = gpio_app
+    client.get("/api/state")                      # Ausgangslage: frei
+
+    for _ in range(4):
+        gpio.set_level(17, 0)                     # Stoerimpuls ...
+        client.get("/api/state")
+        gpio.set_level(17, 1)                     # ... sofort widerrufen
+        state = client.get("/api/state").get_json()
+        assert _space(state, "B1")["occupied"] is False
+
+
+def test_diagnostics_stays_unfiltered(gpio_app):
+    """Die Diagnose muss den ROHEN Sensorwert zeigen, sonst verschleiert sie
+    genau das Flackern, das man dort sehen will."""
+    client, gpio = gpio_app
+    gpio.set_level(17, 0)
+
+    rows = {r["space_id"]: r for r in client.get("/api/diagnostics").get_json()["spaces"]}
+    assert rows["B1"]["raw"] == 0
+    assert rows["B1"]["occupied"] is True         # ungefiltert, sofort
+
+
+def test_simulation_toggles_without_delay():
+    """Im Simulator darf die Entprellung das Umschalten nicht verzoegern."""
+    app = create_app()
+    app.testing = True
+    client = app.test_client()
+
+    before = _space(client.get("/api/state").get_json(), "B3")["occupied"]
+    after = _space(client.post("/api/sim/toggle/B3").get_json(), "B3")["occupied"]
+    assert after is not before
 
 
 def test_state_contract_unchanged_by_diagnostics():

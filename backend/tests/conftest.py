@@ -95,3 +95,19 @@ def fake_gpio(monkeypatch):
     def _install(levels=None, fail_pins=()):
         return install_fake_gpiozero(monkeypatch, levels, fail_pins)
     return _install
+
+
+@pytest.fixture(autouse=True)
+def _test_backend(monkeypatch):
+    """Im Test laeuft standardmaessig der Simulator.
+
+    Im ECHTBETRIEB ist gpio der Standard (localhost = Produktion, siehe
+    app/main.py:_default_backend). Fuer die Testsuite waere das unbrauchbar,
+    weil auf einem Entwicklungsrechner keine GPIO-Hardware existiert. Tests, die
+    den Echtbetrieb pruefen, setzen ANNA_BACKEND selbst oder schleusen ein
+    Backend ueber create_app(backend_factory=...) ein.
+
+    Dass der Produktionsstandard wirklich gpio ist, prueft
+    test_diagnostics.py::test_production_default_backend_is_gpio.
+    """
+    monkeypatch.setenv("ANNA_BACKEND", "simulated")

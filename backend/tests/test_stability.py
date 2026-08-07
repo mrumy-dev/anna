@@ -1,8 +1,7 @@
 """Tests fuer die Entprellung auf Fachebene (app/stability.py).
 
-Diese Tests sind der fertige Pruefstand fuer die noch offene Entscheidungsregel.
-Sobald `ReadingStabilizer.apply()` implementiert ist, die Zeile
-`pytestmark = pytest.mark.skip(...)` loeschen - dann pruefen sie das Verhalten.
+Geprueft wird die gewaehlte Regel: Ein abweichender Messwert muss
+`confirmations` Mal hintereinander auftreten, bevor er uebernommen wird.
 """
 
 from __future__ import annotations
@@ -10,10 +9,6 @@ from __future__ import annotations
 import pytest
 
 from app.stability import ReadingStabilizer
-
-pytestmark = pytest.mark.skip(
-    reason="Entscheidungsregel in app/stability.py noch offen (TODO Team)"
-)
 
 
 def test_first_reading_is_taken_immediately():

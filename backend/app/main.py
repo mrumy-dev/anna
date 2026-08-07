@@ -28,6 +28,7 @@ from .config import layout_path, load_layout, update_space_wiring
 from .models import ParkingSystem, StatsCollector
 from .sensors import create_backend
 from .sensors.base import SensorBackend
+from .stability import ReadingStabilizer
 
 log = logging.getLogger("anna.api")
 
@@ -37,14 +38,18 @@ BackendFactory = Callable[[ParkingSystem, dict], SensorBackend]
 
 
 def _default_backend(system: ParkingSystem, settings: dict) -> SensorBackend:
-    """Backend anhand der Umgebungsvariable ANNA_BACKEND (Default: Simulator).
+    """Backend anhand der Umgebungsvariable ANNA_BACKEND.
 
-    Mit ANNA_STRICT=1 (Standard im systemd-Dienst) wird der Start abgebrochen,
-    wenn der gpio-Modus verlangt ist, aber kein einziger Sensor geoeffnet werden
-    konnte. Besser ein Dienst, der sichtbar nicht startet, als eine Web-App, die
-    ueberzeugend aussieht und in Wirklichkeit nichts misst.
+    STANDARD IST DER ECHTBETRIEB (gpio). Wer die Seite aufruft, sieht damit
+    immer die echten Sensoren - eine Simulation kann nicht versehentlich als
+    Produktion durchgehen. Der Simulator ist ausdruecklich anzufordern:
+
+        ANNA_BACKEND=simulated python run.py
+
+    Mit ANNA_STRICT=1 wird der Start zusaetzlich abgebrochen, wenn der
+    gpio-Modus laeuft, aber kein einziger Sensor geoeffnet werden konnte.
     """
-    name = os.environ.get("ANNA_BACKEND", "simulated")
+    name = os.environ.get("ANNA_BACKEND", "gpio")
     backend = create_backend(
         name, system, bounce_time=settings.get("bounce_time_s", 0.05)
     )
@@ -94,12 +99,30 @@ class Runtime:
     def _load(self) -> None:
         self.system, self.settings = load_layout()
         self.backend = self._factory(self.system, self.settings)
+        self.stabilizer = self._make_stabilizer()
         self._app.config.update(
             SYSTEM=self.system,
             BACKEND=self.backend,
             SETTINGS=self.settings,
             STATS=self.stats,
+            STABILIZER=self.stabilizer,
         )
+
+    def _make_stabilizer(self) -> ReadingStabilizer | None:
+        """Entprellung - nur fuer echte Sensoren.
+
+        Der Simulator hat kein elektrisches Rauschen; dort wuerde die Glaettung
+        lediglich dafuer sorgen, dass eine angetippte Kachel erst beim zweiten
+        Abruf umschaltet.
+        """
+        if self.backend.name == "simulated":
+            return None
+        confirmations = int(self.settings.get("confirmations", 2))
+        if confirmations < 1:
+            log.warning("settings.confirmations=%s ist unbrauchbar, nutze 1.",
+                        confirmations)
+            confirmations = 1
+        return ReadingStabilizer(confirmations)
 
     def reload(self) -> None:
         """Layout neu einlesen und Sensoren neu initialisieren.
@@ -129,8 +152,17 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
     app.config["RUNTIME"] = rt
 
     def current_state() -> dict:
-        """Sensoren lesen, Modell aktualisieren, serialisieren, Statistik fuehren."""
-        rt.system.apply_readings(rt.backend.read_all())
+        """Sensoren lesen, Modell aktualisieren, serialisieren, Statistik fuehren.
+
+        Bei echten Sensoren laeuft die Messung durch die Entprellung, damit ein
+        Auto am Rand des Erfassungsbereichs die Anzeige nicht flackern laesst.
+        Die Diagnose (/api/diagnostics) umgeht das bewusst und zeigt weiterhin
+        den ungefilterten Sensorwert.
+        """
+        readings = rt.backend.read_all()
+        if rt.stabilizer is not None:
+            readings = rt.stabilizer.apply(readings)
+        rt.system.apply_readings(readings)
         state = rt.system.to_dict()
         state["mode"] = rt.backend.name
         rt.stats.record(state)

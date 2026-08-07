@@ -9,9 +9,12 @@ Web-App sieht das aus, als wuerde das Feld flackern.
 Dieses Modul liegt bewusst in der Domaenenschicht: kein GPIO, kein Flask,
 vollstaendig testbar ohne Hardware.
 
-STATUS: Geruest. Die eigentliche Entscheidungsregel ist noch offen -
-siehe TODO in `apply()`. Solange das Modul nicht eingebunden ist, verhaelt sich
-das Backend unveraendert.
+Gewaehlte Einstellung: `confirmations = 2` (in config/parking_layout.json unter
+settings anpassbar). Bei 1,5 s Abfrageintervall heisst das: ein Feldwechsel wird
+nach spaetestens rund 3 s angezeigt, einzelne Ausreisser verschwinden ganz.
+
+Angewendet wird die Glaettung nur auf echte Sensoren. Im Simulator gibt es kein
+elektrisches Rauschen - dort wuerde sie das Umschalten per Klick nur verzoegern.
 """
 
 from __future__ import annotations
@@ -42,33 +45,35 @@ class ReadingStabilizer:
     def apply(self, readings: dict[str, bool]) -> dict[str, bool]:
         """Filtert die Rohmessung und gibt den geglaetteten Zustand zurueck.
 
-        TODO(Team): Entscheidungsregel implementieren (ca. 8 Zeilen).
-
-        Fuer jedes (space_id, occupied) in `readings`:
-          1. Ist `space_id` noch unbekannt -> Wert direkt als bestaetigt
-             uebernehmen (der erste Messwert nach dem Start soll sofort zaehlen,
-             sonst startet die Demo mit falschen Feldern).
-          2. Stimmt `occupied` mit dem bestaetigten Wert ueberein -> einen
-             eventuell laufenden Zaehler in `_pending` verwerfen.
-          3. Weicht `occupied` ab -> Zaehler in `_pending` erhoehen. Erreicht er
-             `self.confirmations`, den neuen Wert nach `_confirmed` uebernehmen
-             und `_pending` fuer dieses Feld loeschen.
-        Rueckgabe: eine Kopie von `_confirmed` (nur die Felder aus `readings`).
-
-        ABWAEGUNG - diese Entscheidung gehoert euch, weil sie vom Verhalten eures
-        Modells abhaengt:
-          - confirmations=1: sofortige Reaktion, aber sichtbares Flackern bei
-            wackligem Sensor.
-          - confirmations=2 bei 1,5 s Abfrageintervall: ruhige Anzeige, aber bis
-            zu 3 s Verzoegerung, bis ein geparktes Auto erscheint.
-          - Hoehere Werte wirken bei der Vorfuehrung schnell traege.
-        Ueberlegt auch, ob "belegt werden" und "frei werden" gleich behandelt
-        werden sollen - ein zu frueh als frei gemeldetes Feld aergert Besucher
-        mehr als ein zu spaet gemeldetes.
+        Regel: Ein abweichender Messwert muss `confirmations` Mal HINTEREINANDER
+        auftreten, bevor er uebernommen wird. Ein einzelner Ausreisser dazwischen
+        setzt den Zaehler zurueck. Der allererste Messwert je Feld gilt sofort -
+        sonst wuerde die Anzeige beim Start mit falschen Feldern beginnen.
         """
-        raise NotImplementedError(
-            "Entscheidungsregel noch offen - siehe TODO in app/stability.py"
-        )
+        result: dict[str, bool] = {}
+
+        for space_id, occupied in readings.items():
+            confirmed = self._confirmed.get(space_id)
+
+            if confirmed is None:
+                # Erster Messwert nach dem Start: sofort uebernehmen.
+                self._confirmed[space_id] = occupied
+                self._pending.pop(space_id, None)
+            elif occupied == confirmed:
+                # Bestaetigt den geltenden Zustand -> laufenden Zaehler verwerfen.
+                self._pending.pop(space_id, None)
+            else:
+                pending_value, count = self._pending.get(space_id, (occupied, 0))
+                count = count + 1 if pending_value == occupied else 1
+                if count >= self.confirmations:
+                    self._confirmed[space_id] = occupied
+                    self._pending.pop(space_id, None)
+                else:
+                    self._pending[space_id] = (occupied, count)
+
+            result[space_id] = self._confirmed[space_id]
+
+        return result
 
     def reset(self) -> None:
         self._confirmed.clear()

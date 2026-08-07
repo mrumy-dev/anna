@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """Startet das ANNA-Backend (Web-App + JSON-API).
 
-Entwicklung / Demonstrator (Simulator, Standard):
+ECHTBETRIEB - das ist der Standard:
     python run.py
+Liest die echten Sensoren ueber die GPIO-Pins. Die angezeigte Belegung kommt
+ausschliesslich vom Modellparkplatz und laesst sich nicht von Hand aendern.
+Benoetigt gpiozero (pip install -r requirements-pi.txt).
 
-Auf dem Raspberry Pi mit echten Sensoren:
-    ANNA_BACKEND=gpio python run.py
+Nur zum Entwickeln ohne Hardware - ausdruecklich anzufordern:
+    ANNA_BACKEND=simulated python run.py
 
 Umgebungsvariablen:
     ANNA_HOST     Bind-Adresse (Standard 0.0.0.0 -> im ganzen WLAN erreichbar)
     ANNA_PORT     Port (Standard 5000; auf macOS ist 5000 oft belegt -> 5050)
-    ANNA_BACKEND  "simulated" (Standard) oder "gpio"
+    ANNA_BACKEND  "gpio" (Standard, Echtbetrieb) oder "simulated"
+    ANNA_STRICT   "1" bricht den Start ab, wenn kein Sensor geoeffnet werden kann
+    ANNA_DIAG     "1" erlaubt das Aendern der Pin-Zuordnung ueber /diag
     ANNA_DEBUG    "1" schaltet den Debug-Modus ein (nur zur Entwicklung!)
     ANNA_SERVER   "werkzeug" (Standard) oder "waitress" (haerterer WSGI-Server)
 
@@ -51,7 +56,14 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    app = create_app()
+    try:
+        app = create_app()
+    except (RuntimeError, ValueError) as exc:
+        # Klartext statt Stacktrace - typisch: gpiozero fehlt oder es laeuft
+        # bereits ein zweiter ANNA-Prozess.
+        log.error("Start nicht moeglich:\n%s", exc)
+        raise SystemExit(1) from exc
+
     host = os.environ.get("ANNA_HOST", "0.0.0.0")
     port = int(os.environ.get("ANNA_PORT", "5000"))
     debug = _env_flag("ANNA_DEBUG")

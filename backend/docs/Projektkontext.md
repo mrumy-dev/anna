@@ -116,8 +116,11 @@ Software-Ausbau:
 - [ ] `GpioSensorBackend` auf echter Hardware verifizieren (Pull-up, Entprellung,
       `invert` je Feld). Logik, Beschaltungsvarianten und Ausfallsicherheit sind
       per gpiozero-Nachbau abgesichert; finaler Test steht am echten Pi aus.
-- [ ] Entprellung auf Fachebene: Geruest in `app/stability.py`, Pruefstand in
-      `tests/test_stability.py` (uebersprungen). Entscheidungsregel offen.
+- [x] Entprellung auf Fachebene (`app/stability.py`): Ein Zustandswechsel muss
+      `settings.confirmations` Mal hintereinander gemessen werden (gewaehlt: 2,
+      also rund 3 s bei 1,5 s Intervall). Verhindert Flackern, wenn ein Auto am
+      Rand des Erfassungsbereichs steht. Wirkt nur auf echte Sensoren; die
+      Diagnose bleibt bewusst ungefiltert.
 - [x] Live-Updates per Server-Sent-Events (`GET /api/stream`, additiv).
 - [x] AP 5.3 teilweise: Reservierung (`/api/reserve/...`) und
       Statistik/Auslastung (`/api/stats`) umgesetzt. Schranke als Aktor offen.
