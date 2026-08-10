@@ -194,6 +194,31 @@ Zeigt je Parkfeld den **rohen elektrischen Pegel** neben der Auswertung:
 | `ok` / `error` | ob der Sensor initialisiert werden konnte |
 | `board_pin` | zugehörige **physische** Nummer auf der Steckerleiste |
 | `hint` | Warnung, falls die konfigurierte Zahl als Header-Pin gemeint gewesen sein könnte |
+| `led_green_pin` / `led_red_pin` | Pins der Status-LEDs (`null` = nicht verdrahtet) |
+| `led` | aktueller LED-Zustand: `{ "green": bool, "red": bool, "error": null }` |
+
+Auf oberster Ebene kommen `leds_enabled` (ist die Ansteuerung eingeschaltet?)
+und `leds_mode` (`gpio` / `simulated` / `none`) dazu.
+
+### Status-LEDs
+
+Je Parkfeld eine grüne und eine rote LED: **frei → grün, belegt → rot**
+(0 = grün, 1 = rot). Liefert ein Sensor gar nichts, bleiben **beide LEDs
+dunkel** statt fälschlich „frei" zu melden.
+
+Die LEDs werden von einem **Hintergrund-Takt** nachgeführt (Intervall aus
+`settings.poll_interval_ms`) – sie stimmen also auch dann, wenn niemand die
+Web-App geöffnet hat. Eingeschaltet wird die Ansteuerung in
+`config/parking_layout.json`:
+
+```json
+"settings": { "leds_enabled": true, "led_active_high": true }
+```
+
+Pro Parkfeld: `"led_green_pin": 6, "led_red_pin": 12`. Die Pin-Nummerierung
+(`bcm` / `board`) gilt auch hier. Ein LED-Pin, der auf einem Sensorpin oder
+einer anderen LED liegt, wird beim Laden **abgelehnt** – ein Ausgang auf einem
+fremden Pin kann Hardware beschädigen.
 
 #### GET /api/diag/pins
 

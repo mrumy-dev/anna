@@ -47,13 +47,13 @@ def test_health_ok(client):
 
 
 # --- GET /api/state -------------------------------------------------------
-def test_state_top_level_contract(client):
+def test_state_top_level_contract(client, space_count):
     resp = client.get("/api/state")
     assert resp.status_code == 200
     data = resp.get_json()
 
     assert data["mode"] == "simulated"
-    assert data["total"] == 7
+    assert data["total"] == space_count
     assert 0 <= data["free"] <= data["total"]
     assert isinstance(data["areas"], list)
     assert len(data["areas"]) == 2
@@ -98,10 +98,10 @@ def test_toggle_unknown_space_returns_404(client):
 
 
 # --- POST /api/sim/randomize ----------------------------------------------
-def test_randomize_returns_state(client):
+def test_randomize_returns_state(client, space_count):
     resp = client.post("/api/sim/randomize")
     assert resp.status_code == 200
-    assert resp.get_json()["total"] == 7
+    assert resp.get_json()["total"] == space_count
 
 
 # --- gpio-Modus: sim-Endpunkte muessen mit HTTP 403 antworten -------------

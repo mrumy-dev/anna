@@ -30,6 +30,8 @@ class FakeGpio:
         self.levels: dict[int, int] = dict(levels or {})
         self.fail_pins = set(fail_pins)
         self.opened: dict[int, object] = {}
+        # Zustand der Ausgangspins (LEDs): {bcm_pin: leuchtet}
+        self.outputs: dict[int, bool] = {}
 
     def level(self, pin: int) -> int:
         return self.levels.get(pin, 1)
@@ -83,8 +85,38 @@ def install_fake_gpiozero(monkeypatch, levels: dict[int, int] | None = None,
         def is_pressed(self) -> bool:
             return self.is_active
 
+    class FakeLED:
+        """Ausgang - bildet gpiozero.LED nach (inkl. active_high)."""
+
+        def __init__(self, pin, active_high=True, initial_value=False):
+            if pin in gpio.fail_pins:
+                raise RuntimeError(f"GPIO{pin} wird bereits verwendet")
+            if pin in gpio.opened:
+                raise RuntimeError(f"GPIO{pin} ist bereits geoeffnet")
+            self._pin_number = pin
+            self.active_high = active_high
+            self.value = 1 if initial_value else 0
+            gpio.opened[pin] = self
+            gpio.outputs[pin] = bool(initial_value)
+
+        def on(self) -> None:
+            self.value = 1
+            gpio.outputs[self._pin_number] = True
+
+        def off(self) -> None:
+            self.value = 0
+            gpio.outputs[self._pin_number] = False
+
+        @property
+        def is_lit(self) -> bool:
+            return bool(self.value)
+
+        def close(self) -> None:
+            gpio.opened.pop(self._pin_number, None)
+
     module.Button = FakeButton
     module.DigitalInputDevice = FakeInput
+    module.LED = FakeLED
     monkeypatch.setitem(sys.modules, "gpiozero", module)
     return gpio
 
@@ -95,6 +127,33 @@ def fake_gpio(monkeypatch):
     def _install(levels=None, fail_pins=()):
         return install_fake_gpiozero(monkeypatch, levels, fail_pins)
     return _install
+
+
+# --- Angaben aus der echten Layout-Konfiguration --------------------------
+# Bewusst abgeleitet statt fest verdrahtet: Kommt ein Parkfeld dazu, muessen
+# die Tests nicht angefasst werden.
+def _layout():
+    from app.config import load_layout
+    system, _ = load_layout()
+    return [s for a in system.areas for s in a.spaces]
+
+
+@pytest.fixture
+def space_count() -> int:
+    """Anzahl Parkfelder laut config/parking_layout.json."""
+    return len(_layout())
+
+
+@pytest.fixture
+def sensor_pins() -> tuple[int, ...]:
+    """Alle konfigurierten Sensor-Pins (BCM)."""
+    return tuple(s.gpio_pin for s in _layout() if s.gpio_pin is not None)
+
+
+@pytest.fixture
+def all_free(sensor_pins) -> dict[int, int]:
+    """Pegel-Vorgabe: alle Reed-Kontakte offen = alle Felder frei."""
+    return {pin: 1 for pin in sensor_pins}
 
 
 @pytest.fixture(autouse=True)
@@ -111,3 +170,7 @@ def _test_backend(monkeypatch):
     test_diagnostics.py::test_production_default_backend_is_gpio.
     """
     monkeypatch.setenv("ANNA_BACKEND", "simulated")
+    # Kein Hintergrund-Takt in Tests: die Messung soll ausschliesslich
+    # durch den Testcode angestossen werden, sonst waeren Zusicherungen
+    # ueber Entprellung und LED-Zustand nicht reproduzierbar.
+    monkeypatch.setenv("ANNA_BACKGROUND", "0")

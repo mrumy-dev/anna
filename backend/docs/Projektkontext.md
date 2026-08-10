@@ -20,8 +20,10 @@ Belegungslogik, JSON-API und Web-UI. Autoren: Faris Ridzal, Mohamed Rumy.
   GPS-Navigation**.
 - **Rechner: Raspberry Pi 4**, Sprache **Python**.
 - **Sensor: Magnetschalter / Reed-Kontakt** je Parkfeld (digitales Signal).
-- **Modell:** 2 Areale – *Blumenstrasse* (4 Felder), *Hauptstrasse* (3 Felder),
-  7 total. Belegt durch metallene Modellautos.
+- **Modell:** 2 Areale – *Blumenstrasse* (4 Felder), *Hauptstrasse* (4 Felder),
+  8 total. Belegt durch metallene Modellautos.
+- **Status-LEDs:** je Feld eine gruene und eine rote LED (frei = gruen,
+  belegt = rot). Ansteuerung ueber `leds_enabled` in der Layout-Konfiguration.
 - Markenfarben: Dunkelblau (#16314f) + Grün (#3aaa35).
 
 ## Was diese Codebasis schon kann
@@ -113,9 +115,20 @@ Software-Ausbau:
       Verwechslung BCM/Header-Pin ohne Umverdrahten korrigierbar.
 - [x] Beschaltung je Feld konfigurierbar: `pull_up` (true/false/null) und
       `active_state` - deckt Reed, NPN und PNP sowie Modulplatinen ab.
-- [ ] `GpioSensorBackend` auf echter Hardware verifizieren (Pull-up, Entprellung,
-      `invert` je Feld). Logik, Beschaltungsvarianten und Ausfallsicherheit sind
-      per gpiozero-Nachbau abgesichert; finaler Test steht am echten Pi aus.
+- [x] `GpioSensorBackend` auf echter Hardware verifiziert: 8 Sensoren aktiv,
+      pin_factory=LGPIOFactory, Belegung wird korrekt erkannt (07.08.2026).
+- [x] Achtes Parkfeld **H4** (Hauptstrasse, GPIO4 / Header-Pin 7) ergaenzt. Die
+      Tests leiten Feldanzahl und Sensorpins aus der Konfiguration ab - ein
+      weiteres Feld erfordert keine Testaenderung mehr.
+- [x] Status-LEDs je Feld (`app/actuators/`): frei = gruen, belegt = rot,
+      Sensor ohne Signal = beide dunkel. Eigener Hintergrund-Takt, damit die
+      LEDs auch ohne geoeffnete Web-App stimmen. Aus Sicherheitsgruenden
+      standardmaessig abgeschaltet (`leds_enabled`), weil ein falsch
+      zugeordneter AUSGANG Hardware beschaedigen kann; LED-Pins auf Sensorpins
+      werden beim Laden abgelehnt.
+- [ ] LED-Verdrahtung mit Elektro bestaetigen, dann `leds_enabled: true`
+      setzen. Pin-Plan: `config/parking_layout.json` und Architekturkonzept 4.2.
+      Pin-Budget ist mit 24 von 26 nutzbaren GPIOs knapp.
 - [x] Entprellung auf Fachebene (`app/stability.py`): Ein Zustandswechsel muss
       `settings.confirmations` Mal hintereinander gemessen werden (gewaehlt: 2,
       also rund 3 s bei 1,5 s Intervall). Verhindert Flackern, wenn ein Auto am

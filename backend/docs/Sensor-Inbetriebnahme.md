@@ -225,6 +225,65 @@ Einstellbar pro Feld in `config/parking_layout.json`:
 
 ---
 
+## Status-LEDs anschliessen
+
+Je Parkfeld eine gruene und eine rote LED: **frei = gruen, belegt = rot**
+(0 = gruen, 1 = rot). Liefert ein Sensor gar nichts, bleiben **beide LEDs
+dunkel** - eine dunkle Stelle ist ehrlicher als ein gruenes Licht, das
+faelschlich einen freien Platz verspricht.
+
+Ueblicher Anschluss je LED:
+
+```
+GPIO-Pin --- Vorwiderstand (z. B. 330 Ohm) --- LED --- GND
+```
+
+### 1. Verdrahten nach Pin-Plan
+
+Der vorgeschlagene Plan steht in `config/parking_layout.json` bei jedem Feld
+(`led_green_pin` / `led_red_pin`) und in `docs/Architekturkonzept.md`,
+Abschnitt 4.2 - dort mit **beiden** Nummern (BCM und Header-Pin).
+
+### 2. Einschalten
+
+Die Ansteuerung ist **absichtlich abgeschaltet**, bis die Verdrahtung steht:
+LEDs sind Ausgaenge, und ein falsch zugeordneter Ausgang kann Hardware
+beschaedigen. Nach dem Verdrahten in `config/parking_layout.json`:
+
+```json
+"settings": { "leds_enabled": true }
+```
+
+Dann `sudo systemctl restart anna`. Im Startlog erscheint:
+
+```
+INFO anna.leds: LED-Ausgabe bereit: 16 LED(s) an 8 Feld(ern), active_high=True.
+INFO anna.api: Hintergrund-Takt fuer die Status-LEDs laeuft (1.5 s).
+```
+
+### 3. Pruefen
+
+Auf `/diag` zeigt die Spalte **LED** je Feld zwei Punkte (gruen/rot) und die
+zugehoerigen Pins - genau das, was das Backend gerade ansteuert. Ein Auto
+auf- und abstellen: der Punkt muss mitwechseln.
+
+Leuchtet eine LED **genau verkehrt herum** (an statt aus), haengt sie gegen
+3V3 oder an einem invertierenden Treiber - dann in den `settings`:
+
+```json
+"led_active_high": false
+```
+
+Der Hintergrund-Takt sorgt dafuer, dass die LEDs auch stimmen, wenn **niemand
+die Web-App geoeffnet hat**. Ohne ihn wuerden sie einfrieren, sobald der letzte
+Browser geschlossen wird.
+
+> **Pin-Budget:** 8 Felder x (1 Sensor + 2 LEDs) = 24 Pins. Nutzbar sind
+> GPIO2-27, also 26. Frei bleiben nur GPIO14/15 (serielle Konsole). Weitere
+> Aktoren brauchen einen Portexpander (MCP23017) oder ein Schieberegister.
+
+---
+
 ## Behobener Softwarefehler (Stand dieser Version)
 
 Bis einschliesslich Commit `bbcb1d4` erzeugte `app/main.py` beim blossen

@@ -18,14 +18,14 @@ import pytest
 
 
 # --- WSGI-Einstiegspunkt ---------------------------------------------------
-def test_wsgi_application_serves_api():
+def test_wsgi_application_serves_api(space_count):
     from wsgi import application
 
     client = application.test_client()
     assert client.get("/api/health").status_code == 200
     state = client.get("/api/state").get_json()
     assert state["mode"] == "simulated"
-    assert state["total"] == 7
+    assert state["total"] == space_count
 
 
 # --- Regression: Import darf keine App (und keine GPIO-Pins) erzeugen ------
@@ -44,13 +44,13 @@ def test_importing_main_creates_no_app():
     )
 
 
-def test_gpio_startup_like_run_py_gets_all_sensors(fake_gpio):
+def test_gpio_startup_like_run_py_gets_all_sensors(fake_gpio, all_free, space_count):
     """Startet wie run.py und prueft, dass WIRKLICH alle Sensoren aktiv sind.
 
     Genau dieser Test haette den Ausfall auf dem Raspberry Pi aufgedeckt:
     vorher meldete jedes Feld 'GPIO.. is already in use'.
     """
-    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+    fake_gpio(all_free)
 
     from app import create_app  # genau der Import aus run.py
     from app.sensors import wiring_specs
@@ -64,7 +64,7 @@ def test_gpio_startup_like_run_py_gets_all_sensors(fake_gpio):
     application.testing = True
 
     rows = application.test_client().get("/api/diagnostics").get_json()["spaces"]
-    assert len(rows) == 7
+    assert len(rows) == space_count
     broken = [r["space_id"] for r in rows if not r["ok"]]
     assert not broken, f"Diese Felder haben keinen Sensor bekommen: {broken}"
 
