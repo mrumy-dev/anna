@@ -236,6 +236,13 @@ Sie wird in der Datei `config/parking_layout.json` festgehalten – diese Datei 
 das „Vertragsdokument" zwischen den beiden Teams. Elektro trägt ein, welcher
 Sensor an welchem Pin hängt; Informatik liest genau diese Felder ein.
 
+> **Massgebliche Fassung:** Die tagesaktuelle Übergabe an Elektro ist
+> **`docs/Pinplan.md`** – sie wird aus `config/parking_layout.json` erzeugt
+> (`python scripts/pinplan.py --write`) und weist zusätzlich aus, welche Pins
+> bereits **bestätigt** und welche noch **Vorschlag** sind. Die Tabellen hier
+> sind der Stand für den Bericht; ein Test stellt sicher, dass sie nicht von der
+> Konfiguration abweichen.
+
 | Parkfeld | Areal | Typ | GPIO-Pin (BCM) | **Physischer Header-Pin** | Signal |
 |---|---|---|---|---|---|
 | B1 | Blumenstrasse | normal | 17 | **11** | digital |

@@ -23,10 +23,50 @@
       "name": "Parkplatz Blumenstrasse",
       "maps_url": "https://www.google.com/maps/search/?api=1&query=Parkplatz+Blumenstrasse",
       "spaces": [
-        { "id": "B1", "type": "normal",   "gpio_pin": 17, "invert": false, "pull_up": true, "led_green_pin": 6,  "led_red_pin": 12 },
-        { "id": "B2", "type": "family",   "gpio_pin": 27, "invert": false, "pull_up": true, "led_green_pin": 13, "led_red_pin": 16 },
-        { "id": "B3", "type": "women",    "gpio_pin": 22, "invert": false, "pull_up": true, "led_green_pin": 19, "led_red_pin": 20 },
-        { "id": "B4", "type": "disabled", "gpio_pin": 23, "invert": false, "pull_up": true, "led_green_pin": 21, "led_red_pin": 26 }
+        {
+          "id": "B1",
+          "type": "normal",
+          "gpio_pin": 17,
+          "invert": false,
+          "pull_up": true,
+          "led_green_pin": 6,
+          "led_red_pin": 12,
+          "sensor_status": "bestaetigt",
+          "led_status": "vorschlag"
+        },
+        {
+          "id": "B2",
+          "type": "family",
+          "gpio_pin": 27,
+          "invert": false,
+          "pull_up": true,
+          "led_green_pin": 13,
+          "led_red_pin": 16,
+          "sensor_status": "bestaetigt",
+          "led_status": "vorschlag"
+        },
+        {
+          "id": "B3",
+          "type": "women",
+          "gpio_pin": 22,
+          "invert": false,
+          "pull_up": true,
+          "led_green_pin": 19,
+          "led_red_pin": 20,
+          "sensor_status": "bestaetigt",
+          "led_status": "vorschlag"
+        },
+        {
+          "id": "B4",
+          "type": "disabled",
+          "gpio_pin": 23,
+          "invert": false,
+          "pull_up": true,
+          "led_green_pin": 21,
+          "led_red_pin": 26,
+          "sensor_status": "bestaetigt",
+          "led_status": "vorschlag"
+        }
       ]
     },
     {
@@ -34,11 +74,52 @@
       "name": "Parkplatz Hauptstrasse",
       "maps_url": "https://www.google.com/maps/search/?api=1&query=Parkplatz+Hauptstrasse",
       "spaces": [
-        { "id": "H1", "type": "normal", "gpio_pin": 24, "invert": false, "pull_up": true, "led_green_pin": 7,  "led_red_pin": 8  },
-        { "id": "H2", "type": "normal", "gpio_pin": 25, "invert": false, "pull_up": true, "led_green_pin": 9,  "led_red_pin": 10 },
-        { "id": "H3", "type": "family", "gpio_pin": 5,  "invert": false, "pull_up": true, "led_green_pin": 11, "led_red_pin": 18 },
-        { "id": "H4", "type": "normal", "gpio_pin": 4,  "invert": false, "pull_up": true, "led_green_pin": 2,  "led_red_pin": 3  }
+        {
+          "id": "H1",
+          "type": "normal",
+          "gpio_pin": 24,
+          "invert": false,
+          "pull_up": true,
+          "led_green_pin": 7,
+          "led_red_pin": 8,
+          "sensor_status": "bestaetigt",
+          "led_status": "vorschlag"
+        },
+        {
+          "id": "H2",
+          "type": "normal",
+          "gpio_pin": 25,
+          "invert": false,
+          "pull_up": true,
+          "led_green_pin": 9,
+          "led_red_pin": 10,
+          "sensor_status": "bestaetigt",
+          "led_status": "vorschlag"
+        },
+        {
+          "id": "H3",
+          "type": "family",
+          "gpio_pin": 5,
+          "invert": false,
+          "pull_up": true,
+          "led_green_pin": 11,
+          "led_red_pin": 18,
+          "sensor_status": "bestaetigt",
+          "led_status": "vorschlag"
+        },
+        {
+          "id": "H4",
+          "type": "normal",
+          "gpio_pin": 4,
+          "invert": false,
+          "pull_up": true,
+          "led_green_pin": 2,
+          "led_red_pin": 3,
+          "sensor_status": "vorschlag",
+          "led_status": "vorschlag"
+        }
       ]
     }
-  ]
+  ],
+  "_status": "'sensor_status' / 'led_status' je Parkfeld: 'bestaetigt' = auf dem Raspberry Pi nachweislich in Betrieb (Sensoren B1-H3 am 07.08.2026, Startmeldung '7 Sensor(en) aktiv'). 'vorschlag' = von der Informatik geplant, aber NOCH NICHT verdrahtet und von Elektro zu bestaetigen: das Feld H4 sowie saemtliche LED-Pins. Bestaetigte Pins bitte nicht ohne Ruecksprache aendern - sie laufen bereits."
 }

@@ -4,6 +4,7 @@ Backend und Web-App für den ANNA-Smart-Parking-Demonstrator. Läuft **ohne
 Raspberry Pi** am Laptop (Sensor-Simulator) und auf dem Pi mit echten
 Reed-Schaltern – nur über eine Umgebungsvariable umgeschaltet.
 
+→ **Pin-Belegung für Elektro: `docs/Pinplan.md`** (erzeugt aus der Konfiguration)
 → Projektkontext (Entscheidungen, Konventionen, Backlog): **`docs/Projektkontext.md`**
 → Architekturkonzept (Lieferobjekt): **`docs/Architekturkonzept.md`**
 → API-Vertrag (Schnittstelle Frontend <-> Backend): **`docs/API.md`**
