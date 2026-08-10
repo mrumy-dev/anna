@@ -51,6 +51,10 @@ class Space:
     #   None  -> kein interner Widerstand (externe Beschaltung), active_state noetig
     pull_up: bool | None = True
     active_state: bool | None = None
+    # Status-LEDs je Feld (BCM-Nummern, None = nicht verdrahtet).
+    # frei -> gruen, belegt -> rot. Siehe app/actuators/.
+    led_green_pin: int | None = None
+    led_red_pin: int | None = None
     occupied: bool = False
     # Reservierung ist eine additive Funktion (AP 5.3). Sie wird bewusst NICHT
     # in to_dict() ausgegeben, damit der /api/state-Vertrag unveraendert bleibt;

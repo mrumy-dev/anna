@@ -74,24 +74,40 @@ def load_layout(path: str | Path | None = None) -> tuple[ParkingSystem, dict]:
                     f"Doppelte Parkfeld-ID '{space_id}' im Layout {path}.")
             seen_ids.add(space_id)
 
-            configured = s.get("gpio_pin")
-            bcm: int | None = None
-            if configured is not None:
+            def resolve(value, role: str, *, is_output: bool = False,
+                        _sid: str = space_id) -> int | None:
+                """Pin aufloesen, pruefen und auf Doppelvergabe achten."""
+                if value is None:
+                    return None
                 try:
-                    bcm = pinmap.resolve_pin(int(configured), numbering)
+                    bcm = pinmap.resolve_pin(int(value), numbering)
                 except pinmap.PinError as exc:
-                    raise ValueError(f"Parkfeld {space_id}: {exc}") from exc
+                    raise ValueError(f"Parkfeld {_sid} ({role}): {exc}") from exc
 
-                if bcm in seen_pins:
-                    log.warning("GPIO%s ist doppelt vergeben (%s und %s).",
-                                bcm, seen_pins[bcm], space_id)
+                owner = seen_pins.get(bcm)
+                if owner is not None:
+                    message = (f"GPIO{bcm} ist doppelt vergeben: {owner} und "
+                               f"{_sid} ({role}).")
+                    if is_output or "LED" in (owner or ""):
+                        # Ein Ausgang auf einem fremden Pin kann Hardware
+                        # beschaedigen - das ist kein blosser Schoenheitsfehler.
+                        raise ValueError(
+                            message + " Ein LED-Ausgang darf sich keinen Pin mit "
+                            "einem Sensor oder einer anderen LED teilen.")
+                    log.warning("%s", message)
                 else:
-                    seen_pins[bcm] = space_id
+                    seen_pins[bcm] = f"{_sid} ({role})"
 
                 note = pinmap.pin_warning(bcm)
                 if note:
-                    log.warning("Parkfeld %s nutzt %s.", space_id,
+                    log.warning("Parkfeld %s (%s) nutzt %s.", _sid, role,
                                 pinmap.describe_pin(bcm))
+                return bcm
+
+            configured = s.get("gpio_pin")
+            bcm = resolve(configured, "Sensor")
+            green = resolve(s.get("led_green_pin"), "LED gruen", is_output=True)
+            red = resolve(s.get("led_red_pin"), "LED rot", is_output=True)
 
             spaces.append(Space(
                 id=space_id,
@@ -101,6 +117,8 @@ def load_layout(path: str | Path | None = None) -> tuple[ParkingSystem, dict]:
                 invert=s.get("invert", default_invert),
                 pull_up=_parse_pull_up(s.get("pull_up", default_pull_up)),
                 active_state=s.get("active_state"),
+                led_green_pin=green,
+                led_red_pin=red,
             ))
         areas.append(
             Area(

@@ -44,7 +44,7 @@ Architektur bindend:
 - **Sensorik: Magnetschalter** (Reed-Kontakt) je Parkfeld für die
   Belegungserkennung.
 - **Modell:** zwei Parkareale – *Blumenstrasse* (4 Parkfelder) und *Hauptstrasse*
-  (3 Parkfelder), insgesamt 7 Felder. Belegt werden sie durch metallene
+  (4 Parkfelder), insgesamt 8 Felder. Belegt werden sie durch metallene
   Modellautos (Hot Wheels).
 
 ### 2.1 Warum ein Raspberry Pi die Architektur vereinfacht
@@ -104,9 +104,11 @@ Domänenmodell → JSON-API → Web-UI im Browser.**
   GND. Über den internen Pull-up-Widerstand liest der Pin im Ruhezustand HIGH;
   schliesst der Magnet den Kontakt, wird der Pin auf GND gezogen (LOW) → Feld
   belegt.
-- **Optional (Erweiterung):** Aktoren wie eine Schranke (Servo) am Eingang oder
-  Status-LEDs je Feld. Diese sind in der Software vorgesehen, aber nicht Teil der
-  Grundfunktion.
+- **Je Parkfeld zwei Status-LEDs** (grün und rot) als Anzeige direkt am Modell:
+  frei → grün, belegt → rot. Angeschlossen als GPIO → Vorwiderstand → LED → GND.
+  Siehe Abschnitt 4.2.
+- **Optional (Erweiterung):** weitere Aktoren wie eine Schranke (Servo) am
+  Eingang. In der Software vorgesehen, aber nicht Teil der Grundfunktion.
 - **Stromversorgung** wird durch Elektro definiert; aus Software-Sicht genügt es,
   dass der Pi und die Sensoren zuverlässig versorgt sind.
 
@@ -127,6 +129,41 @@ analogen Eingang**. Ein digitaler Sensor (Reed-Schalter, viele Induktivsensoren)
 hängt direkt am GPIO. Ein analoger Sensor bräuchte zusätzlich einen
 A/D-Wandler-Baustein (z. B. MCP3008). Diese Frage gehört in das gemeinsame
 Schnittstellen-Arbeitspaket mit Elektro.
+
+### 4.2 Status-LEDs und Pin-Budget
+
+Jedes der 8 Parkfelder erhält eine grüne und eine rote LED. Die Zuordnung folgt
+unmittelbar der Belegung: **0 (frei) = grün, 1 (belegt) = rot**. Meldet ein
+Sensor gar nichts (Pin defekt oder nicht verdrahtet), bleiben **beide LEDs
+dunkel** – eine dunkle Stelle ist ehrlicher als ein grünes Licht, das
+fälschlich einen freien Platz verspricht.
+
+| Parkfeld | LED grün (BCM / Header) | LED rot (BCM / Header) |
+|---|---|---|
+| B1 | 6 / 31 | 12 / 32 |
+| B2 | 13 / 33 | 16 / 36 |
+| B3 | 19 / 35 | 20 / 38 |
+| B4 | 21 / 40 | 26 / 37 |
+| H1 | 7 / 26 | 8 / 24 |
+| H2 | 9 / 21 | 10 / 19 |
+| H3 | 11 / 23 | 18 / 12 |
+| H4 | 2 / 3 | 3 / 5 |
+
+**Pin-Budget:** 8 Felder × (1 Sensor + 2 LEDs) = **24 Pins**. Nutzbar sind
+GPIO2–27 (26 Pins; GPIO0/1 sind für das HAT-EEPROM reserviert). Frei bleiben
+damit nur GPIO14/15, die für die serielle Konsole vorgesehen und deshalb
+bewusst nicht verplant sind. GPIO2/3 tragen feste Pull-up-Widerstände auf der
+Platine – die daran hängenden LEDs glimmen beim Booten kurz, bis die Software
+die Pins als Ausgang setzt. Weitere Aktoren würden einen Portexpander
+(z. B. MCP23017 über I2C) oder ein Schieberegister erfordern.
+
+> **Sicherheit:** LEDs sind **Ausgänge**. Ein falsch zugeordneter Ausgangspin
+> kann Hardware beschädigen, wenn er gegen einen geschlossenen Schalter oder
+> eine andere Quelle treibt. Die Ansteuerung ist daher standardmässig
+> abgeschaltet und wird erst durch `"leds_enabled": true` in
+> `config/parking_layout.json` aktiv – nachdem Elektro die Pin-Zuordnung
+> bestätigt hat. Die Software lehnt zudem jede Konfiguration ab, in der ein
+> LED-Pin auf einem Sensorpin oder einer anderen LED liegt.
 
 ## 5 Softwarearchitektur
 
@@ -159,7 +196,14 @@ flowchart TB
    je Typ). Völlig hardware- und web-unabhängig, daher gut mit Unit-Tests
    abgedeckt.
 3. **Backend / API.** Ein **Flask**-Server stellt JSON-Endpunkte bereit
-   (`/api/state` u. a.) und liefert die Web-UI aus.
+   (`/api/state` u. a.) und liefert die Web-UI aus. Ein **Hintergrund-Takt**
+   misst zusätzlich unabhängig von HTTP-Aufrufen; nur so stimmen die
+   Status-LEDs am Modell auch dann, wenn niemand die Web-App geöffnet hat.
+3b. **Aktor-Schicht (`LedBackend`).** Spiegelbildlich zum Sensor-Backend:
+   `apply({Feld: belegt})` schaltet die Status-LEDs. Implementierungen
+   `GpioLedBackend` (echte Hardware), `SimulatedLedBackend` (nur im Speicher,
+   für Entwicklung und Diagnose-Anzeige) und `NullLedBackend` (abgeschaltet).
+   Die Farblogik selbst ist eine reine Funktion und ohne Pi testbar.
 4. **Web-UI.** Eine responsive Seite (funktioniert im Handy- und Laptop-Browser),
    die `/api/state` im Intervall abfragt und die zwei Areale mit frei/belegt sowie
    den Filtern zeichnet. Ein „Route"-Button öffnet Google Maps.
@@ -201,6 +245,7 @@ Sensor an welchem Pin hängt; Informatik liest genau diese Felder ein.
 | H1 | Hauptstrasse | normal | 24 | **18** | digital |
 | H2 | Hauptstrasse | normal | 25 | **22** | digital |
 | H3 | Hauptstrasse | family | 5 | **29** | digital |
+| H4 | Hauptstrasse | normal | 4 | **7** | digital |
 
 > **Beide Spalten sind verbindlich.** Die BCM-Nummer ist die, mit der die
 > Software arbeitet; die Header-Nummer ist die, die man an der Steckerleiste

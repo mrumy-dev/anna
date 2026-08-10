@@ -18,12 +18,14 @@ import json
 import logging
 import os
 import socket
+import threading
 import time
 from collections.abc import Callable, Iterator
 
 from flask import Flask, Response, jsonify, render_template, request
 
 from . import pins as pinmap
+from .actuators import create_led_backend
 from .config import layout_path, load_layout, update_space_wiring
 from .models import ParkingSystem, StatsCollector
 from .sensors import create_backend
@@ -91,21 +93,94 @@ class Runtime:
         self._app = app
         self._factory = backend_factory
         self.stats = StatsCollector()
+        # Ein Lock, weil ab jetzt zwei Quellen messen: die HTTP-Aufrufe und
+        # der Hintergrund-Takt fuer die LEDs.
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._ticker: threading.Thread | None = None
         self.system: ParkingSystem
         self.settings: dict
         self.backend: SensorBackend
         self._load()
+        self._start_ticker()
+
+    # --- Messen und Ausgeben ---------------------------------------------
+    def update(self) -> dict:
+        """Sensoren lesen, Modell aktualisieren, LEDs nachfuehren.
+
+        Einziger Ort, an dem gemessen wird - egal ob der Anstoss von einem
+        HTTP-Aufruf oder vom Hintergrund-Takt kommt.
+        """
+        with self._lock:
+            readings = self.backend.read_all()
+            if self.stabilizer is not None:
+                readings = self.stabilizer.apply(readings)
+            self.system.apply_readings(readings)
+
+            # Status-LEDs: frei -> gruen, belegt -> rot. Felder, deren Sensor
+            # gar nichts liefert, fehlen in `readings` und werden bewusst als
+            # "unbekannt" (None) weitergereicht - dort bleiben beide LEDs
+            # dunkel, statt faelschlich "frei" zu leuchten.
+            self.leds.apply({
+                s.id: readings.get(s.id)
+                for a in self.system.areas for s in a.spaces
+            })
+
+            state = self.system.to_dict()
+            state["mode"] = self.backend.name
+            self.stats.record(state)
+            return state
+
+    def _start_ticker(self) -> None:
+        """Misst im Hintergrund weiter, auch ohne geoeffnete Webseite.
+
+        Ohne diesen Takt wuerden die Status-LEDs am Modell nur dann stimmen,
+        solange jemand die Web-App offen hat - denn sonst ruft niemand
+        /api/state auf. Nur noetig, wenn es ueberhaupt LEDs gibt; in der
+        Testsuite ueber ANNA_BACKGROUND=0 abgeschaltet.
+        """
+        if self.leds.name == "none":
+            return
+        if os.environ.get("ANNA_BACKGROUND", "1").strip().lower() in {"0", "false", "no", "off"}:
+            return
+
+        interval = max(0.1, self.settings.get("poll_interval_ms", 1500) / 1000.0)
+
+        def loop() -> None:
+            while not self._stop.is_set():
+                try:
+                    self.update()
+                except Exception as exc:  # noqa: BLE001 - Takt darf nie sterben
+                    log.warning("Hintergrund-Messung fehlgeschlagen: %s", exc)
+                self._stop.wait(interval)
+
+        self._ticker = threading.Thread(target=loop, daemon=True,
+                                        name="anna-leds")
+        self._ticker.start()
+        log.info("Hintergrund-Takt fuer die Status-LEDs laeuft (%.1f s).",
+                 interval)
+
+    def _stop_ticker(self) -> None:
+        if self._ticker is not None:
+            self._stop.set()
+            self._ticker.join(timeout=2.0)
+            self._ticker = None
+            self._stop.clear()
 
     def _load(self) -> None:
         self.system, self.settings = load_layout()
         self.backend = self._factory(self.system, self.settings)
         self.stabilizer = self._make_stabilizer()
+        self.leds = create_led_backend(
+            self.system, self.settings, sensor_mode=self.backend.name
+        )
         self._app.config.update(
             SYSTEM=self.system,
             BACKEND=self.backend,
             SETTINGS=self.settings,
             STATS=self.stats,
             STABILIZER=self.stabilizer,
+            LEDS=self.leds,
         )
 
     def _make_stabilizer(self) -> ReadingStabilizer | None:
@@ -131,13 +206,20 @@ class Runtime:
         meldet gpiozero den Pin als belegt.
         """
         reserved = {r["id"] for r in self.system.reservations()}
-        try:
-            self.backend.close()
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Sensor-Backend konnte nicht sauber geschlossen werden: %s", exc)
+        self._stop_ticker()
+        for what, closer in (("Sensor-Backend", self.backend),
+                             ("LED-Ausgabe", getattr(self, "leds", None))):
+            if closer is None:
+                continue
+            try:
+                closer.close()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("%s konnte nicht sauber geschlossen werden: %s",
+                            what, exc)
         self._load()
         for space_id in reserved:
             self.system.reserve(space_id)
+        self._start_ticker()
 
 
 def create_app(backend_factory: BackendFactory | None = None) -> Flask:
@@ -152,21 +234,14 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
     app.config["RUNTIME"] = rt
 
     def current_state() -> dict:
-        """Sensoren lesen, Modell aktualisieren, serialisieren, Statistik fuehren.
+        """Aktueller Zustand fuer die API.
 
         Bei echten Sensoren laeuft die Messung durch die Entprellung, damit ein
         Auto am Rand des Erfassungsbereichs die Anzeige nicht flackern laesst.
         Die Diagnose (/api/diagnostics) umgeht das bewusst und zeigt weiterhin
         den ungefilterten Sensorwert.
         """
-        readings = rt.backend.read_all()
-        if rt.stabilizer is not None:
-            readings = rt.stabilizer.apply(readings)
-        rt.system.apply_readings(readings)
-        state = rt.system.to_dict()
-        state["mode"] = rt.backend.name
-        rt.stats.record(state)
-        return state
+        return rt.update()
 
     # --- Web-UI -----------------------------------------------------------
     @app.get("/")
@@ -268,11 +343,15 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
         """
         rows = rt.backend.diagnostics()
         spaces = {s.id: s for a in rt.system.areas for s in a.spaces}
+        led_states = rt.leds.states()
         for row in rows:
             space = spaces.get(row["space_id"])
             if space is not None:
                 row.setdefault("configured_pin", space.configured_pin)
                 row["type"] = space.type.value
+                row["led_green_pin"] = space.led_green_pin
+                row["led_red_pin"] = space.led_red_pin
+            row["led"] = led_states.get(row["space_id"])
         return jsonify({
             "mode": rt.backend.name,
             "numbering": rt.settings.get("numbering", "bcm"),
@@ -280,6 +359,8 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
             "write_enabled": _diag_write_enabled(),
             "poll_interval_ms": rt.settings.get("poll_interval_ms", 1500),
             "bounce_time_s": rt.settings.get("bounce_time_s", 0.05),
+            "leds_enabled": bool(rt.settings.get("leds_enabled", False)),
+            "leds_mode": rt.leds.name,
             "spaces": rows,
         })
 

@@ -120,8 +120,8 @@ Es sollte in etwa erscheinen:
 
 ```
 INFO anna.gpio: Feld B1 -> GPIO17 (Header-Pin 11) (pull_up=True, invert=False)
-INFO anna.gpio: GPIO-Backend bereit: 7 Sensor(en) aktiv (pin_factory=LGPIOFactory).
-INFO anna: ANNA startet: backend=gpio, areas=2, spaces=7
+INFO anna.gpio: GPIO-Backend bereit: 8 Sensor(en) aktiv (pin_factory=LGPIOFactory).
+INFO anna: ANNA startet: backend=gpio, areas=2, spaces=8
 INFO anna: Web-App erreichbar unter http://0.0.0.0:5000
 ```
 
@@ -133,7 +133,7 @@ Andere Faelle:
 | Meldung | Bedeutung |
 |---|---|
 | `Der Echtbetrieb ... benoetigt die Bibliothek gpiozero` | Schritt B3 unvollstaendig – `requirements-pi.txt` nachinstallieren |
-| `Nur 3 von 7 Sensoren aktiv` | Einige Pins liessen sich nicht oeffnen – siehe `docs/Sensor-Inbetriebnahme.md` |
+| `Nur 3 von 8 Sensoren aktiv` | Einige Pins liessen sich nicht oeffnen – siehe `docs/Sensor-Inbetriebnahme.md` |
 | `KEIN einziger GPIO-Pin konnte geoeffnet werden` | Meist laeuft noch ein zweiter ANNA-Prozess: `sudo systemctl stop anna` |
 
 ---

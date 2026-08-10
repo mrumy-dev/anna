@@ -131,3 +131,18 @@
 
 .scan-empty { font-size: 13px; color: var(--muted); margin-top: 10px; }
 .scan-hit { background: var(--green-soft); }
+
+/* Status-LEDs in der Diagnose-Tabelle */
+.led-dot {
+  display: inline-block;
+  width: 13px; height: 13px;
+  margin-right: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(22, 49, 79, .25);
+  background: #e6ebf0;
+  vertical-align: middle;
+}
+.led-dot.led-green.on { background: var(--green); border-color: var(--green);
+  box-shadow: 0 0 6px rgba(58, 170, 53, .7); }
+.led-dot.led-red.on { background: var(--occupied); border-color: var(--occupied);
+  box-shadow: 0 0 6px rgba(192, 86, 63, .7); }

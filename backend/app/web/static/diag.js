@@ -46,7 +46,7 @@ function render(data) {
   els.updated.textContent = "aktualisiert " + new Date().toLocaleTimeString("de-CH");
 
   els.rows.innerHTML = data.spaces.map(rowHtml).join("")
-    || '<tr><td colspan="7" class="muted">Keine Parkfelder konfiguriert.</td></tr>';
+    || '<tr><td colspan="8" class="muted">Keine Parkfelder konfiguriert.</td></tr>';
 
   if (canWrite) {
     els.rows.querySelectorAll("[data-invert]").forEach((btn) => {
@@ -110,9 +110,29 @@ function rowHtml(s) {
     <td>${raw}</td>
     <td>${verdict}</td>
     <td>${changes}</td>
+    <td>${ledCell(s)}</td>
     <td>${wiring}</td>
     <td>${actions}</td>
   </tr>`;
+}
+
+// Status-LEDs: zeigt an, was das Backend gerade ansteuert - und an welchen
+// Pins. Beim Verdrahten laesst sich damit Feld fuer Feld gegenpruefen.
+function ledCell(s) {
+  if (s.led_green_pin === null && s.led_red_pin === null) {
+    return '<span class="muted">–</span>';
+  }
+  const led = s.led || {};
+  const dot = (on, colour) =>
+    `<span class="led-dot led-${colour}${on ? " on" : ""}"></span>`;
+  const pins = [
+    s.led_green_pin === null ? null : `gruen GPIO${s.led_green_pin}`,
+    s.led_red_pin === null ? null : `rot GPIO${s.led_red_pin}`,
+  ].filter(Boolean).join(" · ");
+
+  return `${dot(led.green, "green")}${dot(led.red, "red")}`
+    + `<span class="row-note">${escapeHtml(pins)}</span>`
+    + (led.error ? `<span class="row-hint">${escapeHtml(led.error)}</span>` : "");
 }
 
 // --- Pin-Suche -------------------------------------------------------------

@@ -219,9 +219,9 @@ def test_scan_finds_the_moving_pin(fake_gpio):
 
 # --- API -------------------------------------------------------------------
 @pytest.fixture
-def gpio_app(fake_gpio):
+def gpio_app(fake_gpio, all_free):
     """App im gpio-Modus mit simulierter Hardware."""
-    gpio = fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+    gpio = fake_gpio(all_free)
 
     def factory(system, settings):
         from app.sensors import wiring_specs
@@ -233,13 +233,13 @@ def gpio_app(fake_gpio):
     return app.test_client(), gpio
 
 
-def test_api_diagnostics_in_simulation():
+def test_api_diagnostics_in_simulation(space_count):
     app = create_app()
     app.testing = True
     data = app.test_client().get("/api/diagnostics").get_json()
     assert data["mode"] == "simulated"
     assert data["numbering"] == "bcm"
-    assert len(data["spaces"]) == 7
+    assert len(data["spaces"]) == space_count
     assert data["spaces"][0]["space_id"] == "B1"
 
 
@@ -352,16 +352,16 @@ def test_diag_page_renders():
 
 
 # --- /api/health meldet den ECHTEN Sensorzustand --------------------------
-def test_health_ok_when_all_sensors_work(gpio_app):
+def test_health_ok_when_all_sensors_work(gpio_app, space_count):
     client, _ = gpio_app
     h = client.get("/api/health").get_json()
     assert h["status"] == "ok"
-    assert h["sensors_ok"] == 7 and h["sensors_total"] == 7
+    assert h["sensors_ok"] == space_count and h["sensors_total"] == space_count
     assert h["sensors_failed"] == []
 
 
-def test_health_degraded_when_one_sensor_fails(fake_gpio):
-    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 5: 1}, fail_pins=(25,))
+def test_health_degraded_when_one_sensor_fails(fake_gpio, all_free):
+    fake_gpio({p: 1 for p in all_free if p != 25}, fail_pins=(25,))
 
     def factory(system, settings):
         from app.sensors import wiring_specs
@@ -375,9 +375,9 @@ def test_health_degraded_when_one_sensor_fails(fake_gpio):
     assert h["sensors_failed"] == ["H2"]      # GPIO25 gehoert zu H2
 
 
-def test_health_error_when_no_sensor_works(fake_gpio):
+def test_health_error_when_no_sensor_works(fake_gpio, sensor_pins, space_count):
     """Der Fall, der bisher als 'ok' durchging - 0 von 7 Sensoren."""
-    fake_gpio(fail_pins=(17, 27, 22, 23, 24, 25, 5))
+    fake_gpio(fail_pins=tuple(sensor_pins))
 
     def factory(system, settings):
         from app.sensors import wiring_specs
@@ -388,7 +388,7 @@ def test_health_error_when_no_sensor_works(fake_gpio):
     app.testing = True
     h = app.test_client().get("/api/health").get_json()
     assert h["status"] == "error"
-    assert h["sensors_ok"] == 0 and h["sensors_total"] == 7
+    assert h["sensors_ok"] == 0 and h["sensors_total"] == space_count
 
 
 def test_health_stays_ok_in_simulation():
@@ -400,13 +400,13 @@ def test_health_stays_ok_in_simulation():
 
 
 # --- localhost ist Produktion, nicht Simulation ---------------------------
-def test_production_default_backend_is_gpio(monkeypatch, fake_gpio):
+def test_production_default_backend_is_gpio(monkeypatch, fake_gpio, all_free):
     """Ohne gesetzte Umgebungsvariable MUSS der Echtbetrieb laufen.
 
     Wer die Seite aufruft, soll nie versehentlich eine Simulation sehen.
     """
     monkeypatch.delenv("ANNA_BACKEND", raising=False)
-    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+    fake_gpio(all_free)
 
     app = create_app()
     app.testing = True
@@ -428,9 +428,9 @@ def test_unknown_backend_name_is_rejected(monkeypatch):
         create_app()
 
 
-def test_manual_manipulation_blocked_in_production(fake_gpio):
+def test_manual_manipulation_blocked_in_production(fake_gpio, all_free):
     """Im Echtbetrieb darf die Belegung nicht von Hand aenderbar sein."""
-    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+    fake_gpio(all_free)
 
     def factory(system, settings):
         from app.sensors import wiring_specs
@@ -497,8 +497,8 @@ def test_index_contains_simulation_banner():
 
 
 # --- Strikt-Modus: lieber gar nicht starten als falsch anzeigen ------------
-def test_strict_mode_refuses_start_without_sensors(monkeypatch, fake_gpio):
-    fake_gpio(fail_pins=(17, 27, 22, 23, 24, 25, 5))
+def test_strict_mode_refuses_start_without_sensors(monkeypatch, fake_gpio, sensor_pins):
+    fake_gpio(fail_pins=tuple(sensor_pins))
     monkeypatch.setenv("ANNA_BACKEND", "gpio")
     monkeypatch.setenv("ANNA_STRICT", "1")
 
@@ -507,8 +507,8 @@ def test_strict_mode_refuses_start_without_sensors(monkeypatch, fake_gpio):
     assert "kein einziger Sensor" in str(exc.value)
 
 
-def test_strict_mode_allows_start_with_sensors(monkeypatch, fake_gpio):
-    fake_gpio({17: 1, 27: 1, 22: 1, 23: 1, 24: 1, 25: 1, 5: 1})
+def test_strict_mode_allows_start_with_sensors(monkeypatch, fake_gpio, all_free):
+    fake_gpio(all_free)
     monkeypatch.setenv("ANNA_BACKEND", "gpio")
     monkeypatch.setenv("ANNA_STRICT", "1")
 
@@ -517,9 +517,9 @@ def test_strict_mode_allows_start_with_sensors(monkeypatch, fake_gpio):
     assert app.test_client().get("/api/health").get_json()["status"] == "ok"
 
 
-def test_without_strict_mode_app_still_starts(monkeypatch, fake_gpio):
+def test_without_strict_mode_app_still_starts(monkeypatch, fake_gpio, sensor_pins):
     """Ohne ANNA_STRICT bleibt das bisherige Verhalten - aber sichtbar krank."""
-    fake_gpio(fail_pins=(17, 27, 22, 23, 24, 25, 5))
+    fake_gpio(fail_pins=tuple(sensor_pins))
     monkeypatch.setenv("ANNA_BACKEND", "gpio")
     monkeypatch.delenv("ANNA_STRICT", raising=False)
 
