@@ -45,10 +45,10 @@ bleiben beide LEDs dunkel. Verdrahtung je LED: **GPIO → Vorwiderstand (z. B. 3
 | B2 | GPIO13 | 33 | GPIO16 | 36 | **bestätigt** |  |
 | B3 | GPIO19 | 35 | GPIO20 | 38 | **bestätigt** |  |
 | B4 | GPIO21 | 40 | GPIO26 | 37 | **bestätigt** |  |
-| H1 | GPIO7 | 26 | GPIO8 | 24 | **bestätigt** |  |
-| H2 | GPIO9 | 21 | GPIO10 | 19 | **bestätigt** |  |
-| H3 | GPIO11 | 23 | GPIO18 | 12 | **bestätigt** |  |
-| H4 | GPIO2 | 3 | GPIO3 | 5 | **bestätigt** | I2C SDA - hat feste 1k8-Pull-ups auf der Platine / I2C SCL - hat feste 1k8-Pull-ups auf der Platine |
+| H1 | GPIO7 | 26 | GPIO8 | 24 | **bestätigt** | SPI0 CE1 - belegt, wenn SPI aktiv ist / SPI0 CE0 - belegt, wenn SPI aktiv ist |
+| H2 | GPIO9 | 21 | GPIO10 | 19 | **bestätigt** | SPI0 MISO - belegt, wenn SPI aktiv ist / SPI0 MOSI - belegt, wenn SPI aktiv ist |
+| H3 | GPIO11 | 23 | GPIO18 | 12 | **bestätigt** | SPI0 SCLK - belegt, wenn SPI aktiv ist |
+| H4 | GPIO2 | 3 | GPIO3 | 5 | **bestätigt** | I2C SDA - hat feste 1k8-Pull-ups auf der Platine; belegt, wenn I2C aktiv ist / I2C SCL - hat feste 1k8-Pull-ups auf der Platine; belegt, wenn I2C aktiv ist |
 
 Die LED-Ansteuerung ist zurzeit **eingeschaltet** (`leds_enabled: true`).
 

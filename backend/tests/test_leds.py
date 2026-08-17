@@ -125,7 +125,8 @@ def test_gpio_leds_survive_broken_pin(fake_gpio):
     leds.apply({"A1": False})
     assert gpio.outputs[6] is True               # gruen funktioniert weiter
     assert leds.states()["A1"]["error"]          # Fehler wird gemeldet
-    assert leds.health()["failed"] == ["A1"]
+    assert leds.health()["failed"] == ["A1/red"]   # je LED, nicht je Feld
+    assert leds.health()["total"] == 2             # gruen + rot
 
 
 def test_gpio_leds_active_low(fake_gpio):
@@ -461,3 +462,100 @@ def test_led_test_rejects_unknown_mode(led_layout):
     app.testing = True
     resp = app.test_client().post("/api/diag/led-test?mode=disco")
     assert resp.status_code == 400
+
+
+# --- Regression: fehlgeschlagenes Schalten darf nichts einfrieren ---------
+def test_failed_write_is_retried_and_reported(fake_gpio):
+    """Ein Schreibfehler darf das Feld nicht dauerhaft dunkel stehen lassen.
+
+    Fruehere Fehlerquelle: Der Zwischenspeicher `_last` merkte sich den
+    Sollzustand AUCH nach einem fehlgeschlagenen led.on(). Beim naechsten Takt
+    griff die Abkuerzung "unveraendert - nicht schreiben", und das Feld blieb
+    fuer immer dunkel - waehrend states() "green: true, error: null" meldete.
+    """
+    gpio = fake_gpio()
+    from app.actuators.gpio import GpioLedBackend
+
+    leds = GpioLedBackend([{"id": "A1", "green_pin": 6, "red_pin": 12}])
+    gruen = gpio.opened[6]
+
+    # Ein einziger Schaltvorgang schlaegt fehl ...
+    original_on = gruen.on
+    kaputt = {"aktiv": True}
+
+    def flaky_on():
+        if kaputt["aktiv"]:
+            raise RuntimeError("Schaltfehler")
+        original_on()
+
+    gruen.on = flaky_on
+    leds.apply({"A1": False})                 # frei -> gruen, schlaegt fehl
+
+    assert gpio.outputs[6] is False
+    assert leds.states()["A1"]["error"], "Der Schreibfehler muss gemeldet werden"
+    assert "A1/green" in leds.health()["failed"]
+
+    # ... beim naechsten Takt wird es erneut versucht.
+    kaputt["aktiv"] = False
+    leds.apply({"A1": False})
+    assert gpio.outputs[6] is True, "Nach dem Fehler muss erneut geschrieben werden"
+    assert leds.states()["A1"]["error"] is None
+    assert leds.health()["failed"] == []
+
+
+def test_errors_are_reported_per_colour(fake_gpio):
+    """Faellt rot aus, darf das den Fehler von gruen nicht verdecken."""
+    fake_gpio(fail_pins=(6, 12))
+    from app.actuators.gpio import GpioLedBackend
+
+    leds = GpioLedBackend([{"id": "A1", "green_pin": 6, "red_pin": 12}])
+    fehler = leds.states()["A1"]["error"]
+    assert "green" in fehler and "red" in fehler
+    assert set(leds.health()["failed"]) == {"A1/green", "A1/red"}
+
+
+# --- /api/health kennt jetzt auch die LEDs --------------------------------
+def test_health_reports_led_failures(fake_gpio, all_free, led_layout):
+    """Fallen LEDs aus, darf die Ampel nicht weiter auf "ok" stehen."""
+    system, _ = load_layout()
+    b1 = system.space("B1")
+    gpio = fake_gpio(all_free, fail_pins=(b1.led_green_pin,))
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+
+    assert h["status"] == "degraded"
+    assert h["leds_mode"] == "gpio"
+    assert h["leds_total"] == 16          # 8 Felder x 2 LEDs
+    assert h["leds_ok"] == 15
+    assert "B1/green" in h["leds_failed"]
+
+
+def test_health_ok_when_all_leds_work(fake_gpio, all_free, led_layout):
+    fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+    assert h["status"] == "ok"
+    assert h["leds_ok"] == 16 and h["leds_failed"] == []
+
+
+def test_spi_pins_are_flagged():
+    """GPIO7-11 sind SPI0 - das muss die Pin-Referenz sagen."""
+    from app import pins as pinmap
+
+    for pin in (7, 8, 9, 10, 11):
+        assert pinmap.pin_warning(pin), f"GPIO{pin} ohne SPI-Hinweis"
+        assert "SPI" in pinmap.pin_warning(pin)

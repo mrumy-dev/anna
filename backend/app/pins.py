@@ -41,8 +41,13 @@ BOARD_POWER_PINS: dict[int, str] = {
 BCM_NOTES: dict[int, str] = {
     0: "ID_SD (HAT-EEPROM) - nicht als Sensoreingang verwenden",
     1: "ID_SC (HAT-EEPROM) - nicht als Sensoreingang verwenden",
-    2: "I2C SDA - hat feste 1k8-Pull-ups auf der Platine",
-    3: "I2C SCL - hat feste 1k8-Pull-ups auf der Platine",
+    2: "I2C SDA - hat feste 1k8-Pull-ups auf der Platine; belegt, wenn I2C aktiv ist",
+    3: "I2C SCL - hat feste 1k8-Pull-ups auf der Platine; belegt, wenn I2C aktiv ist",
+    7: "SPI0 CE1 - belegt, wenn SPI aktiv ist",
+    8: "SPI0 CE0 - belegt, wenn SPI aktiv ist",
+    9: "SPI0 MISO - belegt, wenn SPI aktiv ist",
+    10: "SPI0 MOSI - belegt, wenn SPI aktiv ist",
+    11: "SPI0 SCLK - belegt, wenn SPI aktiv ist",
     14: "UART TXD - belegt, wenn die serielle Konsole aktiv ist",
     15: "UART RXD - belegt, wenn die serielle Konsole aktiv ist",
 }

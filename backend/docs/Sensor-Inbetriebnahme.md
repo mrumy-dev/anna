@@ -296,6 +296,19 @@ Auswertung:
 - **Nichts leuchtet** -> LEDs falsch gepolt (Anode/Kathode vertauscht),
   Vorwiderstand fehlt, oder sie haengen gegen 3V3 statt gegen GND. In dem Fall
   `"led_active_high": false` probieren.
+- **Ein ganzer Block bleibt dunkel (H1-H4)** -> sehr wahrscheinlich sind SPI
+  oder I2C eingeschaltet. Dann haelt der Kerneltreiber diese Pins und die LEDs
+  lassen sich nicht oeffnen:
+
+  ```bash
+  sudo raspi-config nonint get_spi     # 0 = eingeschaltet -> Problem
+  sudo raspi-config nonint get_i2c     # 0 = eingeschaltet -> Problem
+  pinctrl get 2,3,7,8,9,10,11          # muss "op" (Ausgang) zeigen, nicht "a0"/"a3"
+  ```
+
+  H1 (GPIO7/8), H2 (GPIO9/10) und H3-gruen (GPIO11) liegen auf **SPI0**,
+  H4 (GPIO2/3) auf **I2C**. Abhilfe: SPI/I2C in `sudo raspi-config` unter
+  Interface Options abschalten, oder diese LEDs auf freie Pins legen.
 - **Falsches Feld leuchtet** -> Pin-Zuordnung in `config/parking_layout.json`
   korrigieren (der Test nennt die Pins je Feld).
 - **Nur eine Farbe leuchtet** -> die andere LED ist defekt oder verkehrt gepolt.

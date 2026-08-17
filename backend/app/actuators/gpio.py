@@ -40,6 +40,8 @@ class GpioLedBackend(LedBackend):
         self._specs: dict[str, dict] = {}
         self._errors: dict[str, str] = {}
         self._last: dict[str, tuple[bool, bool]] = {}
+        # Fehler beim SCHALTEN (nicht beim Oeffnen), je Feld/Farbe.
+        self._write_errors: dict[str, str] = {}
         self._active_high = active_high
 
         for spec in specs:
@@ -56,7 +58,7 @@ class GpioLedBackend(LedBackend):
                     log.info("LED %s/%s -> %s", space_id, colour,
                              pinmap.describe_pin(pin))
                 except Exception as exc:  # noqa: BLE001 - eine LED darf den Start nicht killen
-                    self._errors[space_id] = f"{colour}: {exc}"
+                    self._errors[f"{space_id}/{colour}"] = str(exc)
                     log.warning("LED-Pin GPIO%s (%s/%s) nicht nutzbar: %s",
                                 pin, space_id, colour, exc)
             if pair:
@@ -78,17 +80,39 @@ class GpioLedBackend(LedBackend):
                 continue
             if self._last.get(space_id) == target:
                 continue  # unveraendert - kein Schreibzugriff noetig
+
             green_on, red_on = target
+            ok = True
             for colour, on in (("green", green_on), ("red", red_on)):
                 led = pair.get(colour)
                 if led is None:
                     continue
                 try:
                     led.on() if on else led.off()
+                    self._write_errors.pop(f"{space_id}/{colour}", None)
                 except Exception as exc:  # noqa: BLE001
+                    ok = False
+                    self._write_errors[f"{space_id}/{colour}"] = str(exc)
                     log.warning("LED %s/%s liess sich nicht schalten: %s",
                                 space_id, colour, exc)
-            self._last[space_id] = target
+
+            if ok:
+                self._last[space_id] = target
+            else:
+                # NICHT merken, wenn das Schreiben fehlschlug. Sonst haelt die
+                # Abkuerzung oben das Feld fuer immer im falschen Zustand fest -
+                # die LED bliebe dunkel, waehrend die Diagnose "alles gut"
+                # meldet. Beim naechsten Takt wird es erneut versucht.
+                self._last.pop(space_id, None)
+
+    def _errors_for(self, space_id: str) -> str | None:
+        """Alle Fehler eines Feldes - Oeffnen UND Schalten, je Farbe."""
+        teile = [
+            f"{key.split('/')[-1]}: {msg}"
+            for key, msg in list(self._errors.items()) + list(self._write_errors.items())
+            if key.split("/")[0] == space_id
+        ]
+        return " | ".join(teile) if teile else None
 
     def states(self) -> dict[str, dict]:
         result: dict[str, dict] = {}
@@ -99,20 +123,23 @@ class GpioLedBackend(LedBackend):
                 "red": red,
                 "green_pin": spec.get("green_pin"),
                 "red_pin": spec.get("red_pin"),
-                "error": self._errors.get(space_id),
+                "error": self._errors_for(space_id),
             }
         return result
 
     def health(self) -> dict:
-        expected = [
-            s["id"] for s in self._specs.values()
-            if s.get("green_pin") is not None or s.get("red_pin") is not None
+        """Zaehlt einzelne LEDs, nicht Felder - 16 LEDs, nicht 8 Felder."""
+        erwartet = [
+            f"{s['id']}/{colour}"
+            for s in self._specs.values()
+            for colour, key in (("green", "green_pin"), ("red", "red_pin"))
+            if s.get(key) is not None
         ]
-        failed = sorted(self._errors)
+        kaputt = sorted(set(self._errors) | set(self._write_errors))
         return {
-            "ok": len([sid for sid in expected if sid not in self._errors]),
-            "total": len(expected),
-            "failed": failed,
+            "ok": len([k for k in erwartet if k not in kaputt]),
+            "total": len(erwartet),
+            "failed": [k for k in kaputt if k in erwartet],
         }
 
     def all_off(self) -> None:

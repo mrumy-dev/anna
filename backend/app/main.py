@@ -281,6 +281,14 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
             status = "degraded"
         else:
             status = "ok"
+
+        # Auch die LEDs zaehlen zur Gesundheit: Fallen sie aus, meldete der
+        # Endpunkt bisher weiterhin "ok" - genau die Luecke, die den
+        # Sensorausfall so lange unsichtbar gemacht hat.
+        leds = rt.leds.health()
+        if leds["failed"] and status == "ok":
+            status = "degraded"
+
         return jsonify({
             "status": status,
             "mode": rt.backend.name,
@@ -289,6 +297,10 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
             "sensors_ok": sensors["ok"],
             "sensors_total": sensors["total"],
             "sensors_failed": sensors["failed"],
+            "leds_mode": rt.leds.name,
+            "leds_ok": leds["ok"],
+            "leds_total": leds["total"],
+            "leds_failed": leds["failed"],
         })
 
     # --- API: Live-Updates per Server-Sent-Events (additiv) ---------------
