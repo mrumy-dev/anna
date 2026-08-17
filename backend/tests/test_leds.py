@@ -225,6 +225,9 @@ def led_layout(tmp_path, monkeypatch):
 
     data = json.loads(layout_path().read_text(encoding="utf-8"))
     data["settings"]["leds_enabled"] = True
+    # Kein Start-Selbsttest in Tests: der wuerde die ersten Sekunden alle LEDs
+    # uebersteuern und damit die Pruefung des Normalbetriebs verfaelschen.
+    data["settings"]["led_boot_test_s"] = 0
     path = tmp_path / "layout.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     monkeypatch.setenv("ANNA_LAYOUT", str(path))
@@ -559,3 +562,197 @@ def test_spi_pins_are_flagged():
     for pin in (7, 8, 9, 10, 11):
         assert pinmap.pin_warning(pin), f"GPIO{pin} ohne SPI-Hinweis"
         assert "SPI" in pinmap.pin_warning(pin)
+
+
+# --- Start-Selbsttest ------------------------------------------------------
+def test_boot_flash_lights_everything_at_startup(fake_gpio, all_free, tmp_path,
+                                                 monkeypatch):
+    """Nach jedem Neustart muessen kurz ALLE LEDs an sein.
+
+    Ein Blick aufs Modell beantwortet damit ohne einen einzigen Befehl die
+    wichtigste Frage: Kommt ueberhaupt Strom bei den LEDs an?
+    """
+    from app.config import layout_path
+
+    data = json.loads(layout_path().read_text(encoding="utf-8"))
+    data["settings"]["leds_enabled"] = True
+    data["settings"]["led_boot_test_s"] = 30
+    path = tmp_path / "layout.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setenv("ANNA_LAYOUT", str(path))
+
+    gpio = fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    system, _ = load_layout()
+
+    # Alle 16 LEDs muessen an sein - auch die roten, obwohl alles frei ist.
+    for area in system.areas:
+        for space in area.spaces:
+            assert gpio.outputs[space.led_green_pin] is True, f"{space.id} gruen"
+            assert gpio.outputs[space.led_red_pin] is True, f"{space.id} rot"
+
+    assert app.config["RUNTIME"].leds.override_info()["label"] == "Start-Selbsttest"
+
+
+def test_boot_flash_can_be_switched_off(fake_gpio, all_free, led_layout):
+    """led_boot_test_s = 0 -> sofort Normalbetrieb."""
+    gpio = fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    system, _ = load_layout()
+    b1 = system.space("B1")
+
+    assert app.config["RUNTIME"].leds.override_info() is None
+    # Ohne Start-Selbsttest schreibt erst die erste Messung die LEDs
+    # (im Betrieb erledigt das der Hintergrund-Takt binnen 1,5 s).
+    app.test_client().get("/api/state")
+    assert gpio.outputs[b1.led_green_pin] is True     # frei -> gruen
+    assert gpio.outputs[b1.led_red_pin] is False
+
+
+def test_start_zeigt_die_wirklichkeit_nicht_ein_testmuster():
+    """Beim Start muessen die LEDs die Belegung zeigen, kein Testmuster.
+
+    Anforderung: alle Felder frei = alle LEDs gruen. Ein Selbsttest, der beim
+    Start ALLE LEDs (gruen UND rot) anschaltet, widerspricht dem - er ist
+    deshalb standardmaessig aus und nur zum Suchen einer Verdrahtung gedacht.
+    """
+    _, settings = load_layout()
+    assert settings.get("led_boot_test_s", 0) == 0, (
+        "led_boot_test_s muss im Auslieferzustand 0 sein - sonst leuchten beim "
+        "Start alle LEDs statt der tatsaechlichen Belegung.")
+
+
+def test_leds_stimmen_sofort_beim_start(fake_gpio, all_free, led_layout):
+    """Ohne einen einzigen Aufruf: alle frei -> alle gruen, von Sekunde eins an."""
+    gpio = fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    create_app(backend_factory=factory)          # kein /api/state noetig
+    system, _ = load_layout()
+    for area in system.areas:
+        for s in area.spaces:
+            assert gpio.outputs[s.led_green_pin] is True, f"{s.id} nicht gruen"
+            assert gpio.outputs[s.led_red_pin] is False, f"{s.id} faelschlich rot"
+
+
+def test_find_leds_skips_sensor_pins():
+    """Die LED-Suche darf niemals einen Sensorpin treiben.
+
+    Ein Ausgang gegen einen geschlossenen Reed-Schalter waere ein Kurzschluss
+    nach GND.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    from app import pins as pinmap
+
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location(
+        "gpio_check", root / "scripts" / "gpio_check.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    system, _ = load_layout()
+    sensorpins = {s.gpio_pin for a in system.areas for s in a.spaces
+                  if s.gpio_pin is not None}
+    kandidaten = [p for p in pinmap.ALL_BCM_PINS
+                  if p not in sensorpins and p not in (0, 1)]
+
+    assert not (set(kandidaten) & sensorpins), "Sensorpin in der LED-Suche!"
+    assert 0 not in kandidaten and 1 not in kandidaten
+    # Alle geplanten LED-Pins muessen enthalten sein, sonst findet die Suche
+    # die eigene Verdrahtung nicht.
+    for area in system.areas:
+        for space in area.spaces:
+            for pin in (space.led_green_pin, space.led_red_pin):
+                if pin is not None:
+                    assert pin in kandidaten, f"GPIO{pin} fehlt in der Suche"
+
+
+# --- Die Anforderung, wortwoertlich ---------------------------------------
+def test_ein_auto_macht_genau_ein_feld_rot(fake_gpio, all_free, led_layout):
+    """8 Felder. Auto auf EIN Feld -> genau dieses Feld rot, Rest bleibt gruen.
+
+    Das ist die Anforderung in einem Test: nicht alle, nicht keines, sondern
+    genau das Feld, auf dem das Auto steht.
+    """
+    gpio = fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    client = app.test_client()
+    system, _ = load_layout()
+    felder = [s for a in system.areas for s in a.spaces]
+    assert len(felder) == 8
+
+    # Startzustand: alles frei -> ALLE LEDs gruen
+    client.get("/api/state")
+    for s in felder:
+        assert gpio.outputs[s.led_green_pin] is True, f"{s.id} muss gruen sein"
+        assert gpio.outputs[s.led_red_pin] is False, f"{s.id} darf nicht rot sein"
+
+    # Jedes Feld einzeln durchprobieren
+    for belegt in felder:
+        gpio.set_level(belegt.gpio_pin, 0)              # Auto drauf
+        for _ in range(3):                              # Entprellung abwarten
+            client.get("/api/state")
+
+        for s in felder:
+            soll_rot = (s.id == belegt.id)
+            assert gpio.outputs[s.led_red_pin] is soll_rot, (
+                f"Auto auf {belegt.id}: {s.id} rot={gpio.outputs[s.led_red_pin]}, "
+                f"erwartet {soll_rot}")
+            assert gpio.outputs[s.led_green_pin] is (not soll_rot), (
+                f"Auto auf {belegt.id}: {s.id} gruen falsch")
+
+        gpio.set_level(belegt.gpio_pin, 1)              # Auto weg
+        for _ in range(3):
+            client.get("/api/state")
+        assert gpio.outputs[belegt.led_green_pin] is True
+        assert gpio.outputs[belegt.led_red_pin] is False
+
+
+def test_zwei_autos_machen_genau_zwei_felder_rot(fake_gpio, all_free, led_layout):
+    gpio = fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    client = app.test_client()
+    system, _ = load_layout()
+    b3, h1 = system.space("B3"), system.space("H1")
+
+    gpio.set_level(b3.gpio_pin, 0)
+    gpio.set_level(h1.gpio_pin, 0)
+    for _ in range(3):
+        client.get("/api/state")
+
+    rot = [s.id for a in system.areas for s in a.spaces
+           if gpio.outputs[s.led_red_pin]]
+    assert rot == ["B3", "H1"], f"rot sind: {rot}"

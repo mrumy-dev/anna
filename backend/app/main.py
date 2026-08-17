@@ -174,6 +174,13 @@ class Runtime:
         self.leds = create_led_backend(
             self.system, self.settings, sensor_mode=self.backend.name
         )
+        # Optionaler Selbsttest beim Start (alle LEDs an). STANDARDMAESSIG AUS:
+        # Der Startzustand soll die Wirklichkeit zeigen - alle Felder frei
+        # heisst alle LEDs gruen, nicht alle LEDs an. Nur zum Suchen einer
+        # Verdrahtung ueber led_boot_test_s einschalten.
+        boot = float(self.settings.get("led_boot_test_s", 0))
+        if boot > 0:
+            self.leds.boot_flash(boot)
         self._app.config.update(
             SYSTEM=self.system,
             BACKEND=self.backend,
@@ -182,6 +189,14 @@ class Runtime:
             STABILIZER=self.stabilizer,
             LEDS=self.leds,
         )
+
+        # Sofort einmal messen und ausgeben. Ohne das waeren die LEDs bis zum
+        # ersten Takt dunkel - der Startzustand soll aber von der ersten
+        # Sekunde an stimmen: alle Felder frei = alle LEDs gruen.
+        try:
+            self.update()
+        except Exception as exc:  # noqa: BLE001 - Start darf daran nicht scheitern
+            log.warning("Erste Messung beim Start fehlgeschlagen: %s", exc)
 
     def _make_stabilizer(self) -> ReadingStabilizer | None:
         """Entprellung - nur fuer echte Sensoren.
