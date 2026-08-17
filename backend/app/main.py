@@ -25,7 +25,7 @@ from collections.abc import Callable, Iterator
 from flask import Flask, Response, jsonify, render_template, request
 
 from . import pins as pinmap
-from .actuators import create_led_backend
+from .actuators import create_led_backend, test_pattern
 from .config import layout_path, load_layout, update_space_wiring
 from .models import ParkingSystem, StatsCollector
 from .sensors import create_backend
@@ -361,6 +361,9 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
             "bounce_time_s": rt.settings.get("bounce_time_s", 0.05),
             "leds_enabled": bool(rt.settings.get("leds_enabled", False)),
             "leds_mode": rt.leds.name,
+            "leds_health": rt.leds.health(),
+            "led_test": rt.leds.override_info(),
+            "leds_reason": getattr(rt.leds, "reason", None),
             "spaces": rows,
         })
 
@@ -420,6 +423,47 @@ def create_app(backend_factory: BackendFactory | None = None) -> Flask:
             return jsonify({"error": str(exc)}), 400
 
         return jsonify({"ok": True, "spaces": rt.backend.diagnostics()})
+
+    @app.post("/api/diag/led-test")
+    def api_diag_led_test():
+        """Treibt ein Testmuster auf die LEDs - der Selbsttest fuer Ausgaenge.
+
+        Fuer Eingaenge kann man Pegel beobachten (Pin-Suche). Bei AUSGAENGEN
+        geht das prinzipiell nicht: man muss sie einschalten und hinsehen.
+        Muster: gruen | rot | beide | aus | feld (mit ?space=B1).
+
+        Das Muster uebernimmt die LEDs fuer 'seconds' Sekunden, danach laeuft
+        der Normalbetrieb von selbst weiter - der Hintergrund-Takt uebernimmt.
+        """
+        if rt.leds.name == "none":
+            return jsonify({
+                "error": "LED-Ansteuerung ist abgeschaltet. In "
+                         "config/parking_layout.json \"leds_enabled\": true "
+                         "setzen und den Dienst neu starten.",
+                "leds_enabled": bool(rt.settings.get("leds_enabled", False)),
+            }), 400
+
+        mode = request.args.get("mode", "beide")
+        space = request.args.get("space")
+        seconds = max(1.0, min(60.0, request.args.get(
+            "seconds", default=10.0, type=float)))
+        try:
+            pattern = test_pattern(rt.system.space_ids, mode, space)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        rt.leds.set_override(pattern, seconds=seconds, label=mode)
+        return jsonify({
+            "ok": True, "mode": mode, "space": space, "seconds": seconds,
+            "leds": rt.leds.states(),
+        })
+
+    @app.delete("/api/diag/led-test")
+    def api_diag_led_test_stop():
+        """Testmuster sofort beenden, Normalbetrieb wieder aufnehmen."""
+        rt.leds.set_override(None)
+        rt.update()
+        return jsonify({"ok": True})
 
     @app.post("/api/diag/reload")
     def api_diag_reload():

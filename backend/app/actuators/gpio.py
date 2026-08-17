@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 
 from .. import pins as pinmap
-from .base import LedBackend, colors_for
+from .base import LedBackend
 
 log = logging.getLogger("anna.leds")
 
@@ -35,6 +35,7 @@ class GpioLedBackend(LedBackend):
         """specs: je Parkfeld {id, green_pin, red_pin}."""
         from gpiozero import LED  # noqa: WPS433 (bewusst lokal)
 
+        super().__init__()
         self._leds: dict[str, dict] = {}
         self._specs: dict[str, dict] = {}
         self._errors: dict[str, str] = {}
@@ -70,9 +71,11 @@ class GpioLedBackend(LedBackend):
                         "konnte initialisiert werden.")
 
     # --- Ausgabe ----------------------------------------------------------
-    def apply(self, occupancy: dict[str, bool | None]) -> None:
+    def _write(self, states: dict[str, tuple[bool, bool]]) -> None:
         for space_id, pair in self._leds.items():
-            target = colors_for(occupancy.get(space_id))
+            target = states.get(space_id)
+            if target is None:
+                continue
             if self._last.get(space_id) == target:
                 continue  # unveraendert - kein Schreibzugriff noetig
             green_on, red_on = target

@@ -18,6 +18,10 @@ const els = {
   updated: document.getElementById("updated"),
   scanBtn: document.getElementById("scan-btn"),
   scanResult: document.getElementById("scan-result"),
+  ledsOff: document.getElementById("leds-off"),
+  ledTestState: document.getElementById("led-test-state"),
+  ledTestResult: document.getElementById("led-test-result"),
+  ledTestField: document.getElementById("led-test-field"),
 };
 
 let spaceIds = [];
@@ -44,6 +48,23 @@ function render(data) {
   els.numbering.textContent = numbering;
   els.writeState.textContent = data.write_enabled ? "frei (ANNA_DIAG=1)" : "gesperrt";
   els.updated.textContent = "aktualisiert " + new Date().toLocaleTimeString("de-CH");
+
+  // Abgeschaltete LED-Ausgabe deutlich melden - sonst sieht ein
+  // ausgeschalteter Ausgang exakt wie ein Hardwarefehler aus.
+  const hatLedPins = data.spaces.some(
+    (s) => s.led_green_pin !== null || s.led_red_pin !== null);
+  els.ledsOff.hidden = !(hatLedPins && !data.leds_enabled);
+
+  const test = data.led_test;
+  els.ledTestState.textContent = test
+    ? `Testmuster "${test.label}" aktiv – noch ${test.seconds_left} s`
+    : (data.leds_enabled ? "bereit" : "abgeschaltet");
+
+  if (els.ledTestField.options.length !== data.spaces.length) {
+    els.ledTestField.innerHTML = data.spaces.map(
+      (s) => `<option value="${escapeHtml(s.space_id)}">`
+        + `${escapeHtml(s.space_id)}</option>`).join("");
+  }
 
   els.rows.innerHTML = data.spaces.map(rowHtml).join("")
     || '<tr><td colspan="8" class="muted">Keine Parkfelder konfiguriert.</td></tr>';
@@ -134,6 +155,43 @@ function ledCell(s) {
     + `<span class="row-note">${escapeHtml(pins)}</span>`
     + (led.error ? `<span class="row-hint">${escapeHtml(led.error)}</span>` : "");
 }
+
+// --- LED-Selbsttest --------------------------------------------------------
+// Bei Eingaengen kann man Pegel beobachten. Bei AUSGAENGEN geht das nicht -
+// man muss sie treiben und hinsehen. Deshalb dieses Testmuster.
+async function ledTest(mode) {
+  const params = new URLSearchParams({ mode, seconds: "15" });
+  if (mode === "feld") {
+    const sel = document.getElementById("led-test-field");
+    if (!sel.value) return;
+    params.set("space", sel.value);
+  }
+  try {
+    const res = await fetch("/api/diag/led-test?" + params.toString(),
+      { method: "POST" });
+    const data = await res.json();
+    els.ledTestResult.innerHTML = res.ok
+      ? `<p class="meta-line">Muster <strong>${escapeHtml(mode)}</strong>`
+        + `${data.space ? " (" + escapeHtml(data.space) + ")" : ""}`
+        + ` läuft für ${data.seconds} s.</p>`
+      : `<p class="warn">${escapeHtml(data.error || "Fehler")}</p>`;
+  } catch (err) {
+    els.ledTestResult.innerHTML = '<p class="warn">Test fehlgeschlagen.</p>';
+  }
+  refresh();
+}
+
+document.querySelectorAll("[data-ledtest]").forEach((btn) => {
+  btn.addEventListener("click", () => ledTest(btn.dataset.ledtest));
+});
+
+document.getElementById("led-test-stop").addEventListener("click", async () => {
+  try {
+    await fetch("/api/diag/led-test", { method: "DELETE" });
+    els.ledTestResult.innerHTML = "";
+  } catch (err) { /* ignore */ }
+  refresh();
+});
 
 // --- Pin-Suche -------------------------------------------------------------
 els.scanBtn.addEventListener("click", async () => {

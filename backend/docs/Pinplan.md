@@ -41,19 +41,16 @@ bleiben beide LEDs dunkel. Verdrahtung je LED: **GPIO → Vorwiderstand (z. B. 3
 
 | Parkfeld | grün BCM | grün Header | rot BCM | rot Header | Status | Hinweis |
 |---|---|---|---|---|---|---|
-| B1 | GPIO6 | 31 | GPIO12 | 32 | Vorschlag |  |
-| B2 | GPIO13 | 33 | GPIO16 | 36 | Vorschlag |  |
-| B3 | GPIO19 | 35 | GPIO20 | 38 | Vorschlag |  |
-| B4 | GPIO21 | 40 | GPIO26 | 37 | Vorschlag |  |
-| H1 | GPIO7 | 26 | GPIO8 | 24 | Vorschlag |  |
-| H2 | GPIO9 | 21 | GPIO10 | 19 | Vorschlag |  |
-| H3 | GPIO11 | 23 | GPIO18 | 12 | Vorschlag |  |
-| H4 | GPIO2 | 3 | GPIO3 | 5 | Vorschlag | I2C SDA - hat feste 1k8-Pull-ups auf der Platine / I2C SCL - hat feste 1k8-Pull-ups auf der Platine |
+| B1 | GPIO6 | 31 | GPIO12 | 32 | **bestätigt** |  |
+| B2 | GPIO13 | 33 | GPIO16 | 36 | **bestätigt** |  |
+| B3 | GPIO19 | 35 | GPIO20 | 38 | **bestätigt** |  |
+| B4 | GPIO21 | 40 | GPIO26 | 37 | **bestätigt** |  |
+| H1 | GPIO7 | 26 | GPIO8 | 24 | **bestätigt** |  |
+| H2 | GPIO9 | 21 | GPIO10 | 19 | **bestätigt** |  |
+| H3 | GPIO11 | 23 | GPIO18 | 12 | **bestätigt** |  |
+| H4 | GPIO2 | 3 | GPIO3 | 5 | **bestätigt** | I2C SDA - hat feste 1k8-Pull-ups auf der Platine / I2C SCL - hat feste 1k8-Pull-ups auf der Platine |
 
-Die LED-Ansteuerung ist zurzeit **abgeschaltet** (`leds_enabled: false`).
-Sie wird erst aktiv, wenn die Verdrahtung steht und der Wert in der JSON auf `true`
-gesetzt wird – LEDs sind Ausgänge, ein falsch zugeordneter Ausgang kann Hardware
-beschädigen.
+Die LED-Ansteuerung ist zurzeit **eingeschaltet** (`leds_enabled: true`).
 
 ## Pin-Budget
 

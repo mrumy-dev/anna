@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import pins as pinmap  # noqa: E402
 from app.config import load_layout  # noqa: E402
+from app.actuators.base import test_pattern as base_test_pattern  # noqa: E402
 from app.sensors import wiring_specs  # noqa: E402
 
 
@@ -118,12 +119,74 @@ def scan(seconds: float) -> None:
     print("\nDiesen Pin in config/parking_layout.json beim passenden Feld eintragen.")
 
 
+def led_test(seconds: float) -> None:
+    """Treibt nacheinander Testmuster auf die LEDs - Selbsttest fuer Ausgaenge.
+
+    Laeuft unabhaengig vom Webserver. WICHTIG: vorher `sudo systemctl stop anna`,
+    sonst haelt der Dienst die Pins.
+    """
+    system, settings = load_layout()
+    from app.actuators import led_specs
+
+    specs = led_specs(system)
+    verdrahtet = [s for s in specs
+                  if s["green_pin"] is not None or s["red_pin"] is not None]
+    if not verdrahtet:
+        print("Kein Parkfeld hat LED-Pins konfiguriert.")
+        return
+
+    try:
+        from app.actuators.gpio import GpioLedBackend
+    except ImportError as exc:  # pragma: no cover
+        print(f"gpiozero fehlt: {exc}")
+        return
+
+    active_high = bool(settings.get("led_active_high", True))
+    print(f"LED-Selbsttest, active_high={active_high}. Beenden mit Ctrl+C.\n")
+    if not settings.get("leds_enabled", False):
+        print("Hinweis: settings.leds_enabled ist false - im NORMALBETRIEB wird")
+        print("         damit keine LED geschaltet. Dieser Test treibt sie")
+        print("         trotzdem, damit die Verdrahtung pruefbar ist.\n")
+
+    leds = GpioLedBackend(specs, active_high=active_high)
+    ids = [s["id"] for s in specs]
+    try:
+        for mode, text in (("beide", "ALLE LEDs an - leuchtet ueberhaupt etwas?"),
+                           ("gruen", "alle GRUENEN an"),
+                           ("rot", "alle ROTEN an"),
+                           ("aus", "alles aus")):
+            print(f"  {text}")
+            leds.set_override(base_test_pattern(ids, mode), seconds=seconds,
+                              label=mode)
+            time.sleep(seconds)
+
+        print("\n  Jetzt Feld fuer Feld - stimmt die Zuordnung?")
+        for space_id in ids:
+            spec = next(s for s in specs if s["id"] == space_id)
+            print(f"    {space_id}  (gruen GPIO{spec['green_pin']}, "
+                  f"rot GPIO{spec['red_pin']})")
+            leds.set_override(base_test_pattern(ids, "feld", space_id),
+                              seconds=seconds, label=space_id)
+            time.sleep(seconds)
+    except KeyboardInterrupt:
+        print("\nAbgebrochen.")
+    finally:
+        leds.close()
+        print("\nLEDs ausgeschaltet.")
+    print("Leuchtete nichts -> Verdrahtung/Polung pruefen, oder "
+          "led_active_high umstellen.")
+    print("Leuchtete das falsche Feld -> Pin-Zuordnung in "
+          "config/parking_layout.json korrigieren.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="ANNA Sensor-Diagnose")
     parser.add_argument("--scan", action="store_true",
                         help="alle brauchbaren Pins beobachten (Pin-Suche)")
     parser.add_argument("--pinout", action="store_true",
                         help="Header-Tabelle BCM <-> physischer Pin ausgeben")
+    parser.add_argument("--led-test", action="store_true",
+                        help="Testmuster auf die Status-LEDs treiben")
     parser.add_argument("--seconds", type=float, default=8.0,
                         help="Dauer der Pin-Suche (Standard 8)")
     parser.add_argument("--interval", type=float, default=0.5,
@@ -132,6 +195,8 @@ def main() -> None:
 
     if args.pinout:
         print_pinout()
+    elif args.led_test:
+        led_test(max(0.5, min(10.0, args.interval * 4)))
     elif args.scan:
         scan(args.seconds)
     else:

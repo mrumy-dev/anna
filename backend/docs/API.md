@@ -197,8 +197,26 @@ Zeigt je Parkfeld den **rohen elektrischen Pegel** neben der Auswertung:
 | `led_green_pin` / `led_red_pin` | Pins der Status-LEDs (`null` = nicht verdrahtet) |
 | `led` | aktueller LED-Zustand: `{ "green": bool, "red": bool, "error": null }` |
 
-Auf oberster Ebene kommen `leds_enabled` (ist die Ansteuerung eingeschaltet?)
-und `leds_mode` (`gpio` / `simulated` / `none`) dazu.
+Auf oberster Ebene kommen dazu: `leds_enabled` (ist die Ansteuerung
+eingeschaltet?), `leds_mode` (`gpio` / `simulated` / `none`), `leds_health`,
+`leds_reason` (**warum** nichts geschaltet wird, falls `leds_mode` = `none`)
+und `led_test` (laufendes Testmuster oder `null`).
+
+#### POST /api/diag/led-test · DELETE /api/diag/led-test
+
+Selbsttest für die Ausgänge. Bei Sensoren lassen sich Pegel beobachten – LEDs
+muss man **einschalten und hinsehen**. Query-Parameter:
+
+| Parameter | Werte |
+|---|---|
+| `mode` | `gruen` \| `rot` \| `beide` \| `aus` \| `feld` |
+| `space` | Parkfeld-ID, nur bei `mode=feld` |
+| `seconds` | Haltedauer, 1–60 (Standard 10) |
+
+Das Muster übernimmt die LEDs für die angegebene Dauer; danach läuft der
+Normalbetrieb von selbst weiter (der Hintergrund-Takt schreibt wieder die
+Belegung). `DELETE` beendet den Test sofort. Ist die Ansteuerung abgeschaltet,
+antwortet der Endpunkt mit HTTP 400 und nennt den Grund.
 
 ### Status-LEDs
 

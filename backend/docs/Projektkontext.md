@@ -126,9 +126,18 @@ Software-Ausbau:
       standardmaessig abgeschaltet (`leds_enabled`), weil ein falsch
       zugeordneter AUSGANG Hardware beschaedigen kann; LED-Pins auf Sensorpins
       werden beim Laden abgelehnt.
-- [ ] LED-Verdrahtung mit Elektro bestaetigen, dann `leds_enabled: true`
-      setzen. Pin-Plan: `config/parking_layout.json` und Architekturkonzept 4.2.
-      Pin-Budget ist mit 24 von 26 nutzbaren GPIOs knapp.
+- [x] LED-Verdrahtung steht, `leds_enabled` eingeschaltet, led_status auf
+      "bestaetigt". Pin-Plan: `docs/Pinplan.md` (erzeugt).
+- [x] **Fehler behoben:** Die LEDs reagierten nicht, weil `leds_enabled` nach
+      dem Verdrahten nie umgelegt wurde - und die Software hat das NICHT
+      gemeldet. Jetzt: Startlog-Warnung, roter Hinweis auf /diag, `leds_reason`
+      in /api/diagnostics.
+- [x] LED-Selbsttest (`POST /api/diag/led-test`, Knoepfe auf /diag,
+      `scripts/gpio_check.py --led-test`). Ausgaenge lassen sich nicht
+      beobachten wie Eingaenge - man muss sie treiben und hinsehen.
+- [x] Eine fehlende gpiozero-Installation oder ein blockierter LED-Pin legt
+      nicht mehr die ganze App lahm: Die Parkplatzanzeige laeuft weiter, die
+      LED-Ausgabe faellt mit sichtbarem Grund aus.
 - [x] Entprellung auf Fachebene (`app/stability.py`): Ein Zustandswechsel muss
       `settings.confirmations` Mal hintereinander gemessen werden (gewaehlt: 2,
       also rund 3 s bei 1,5 s Intervall). Verhindert Flackern, wenn ein Auto am

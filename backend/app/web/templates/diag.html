@@ -74,6 +74,42 @@
       </div>
     </section>
 
+    <p id="leds-off" class="warn warn-strong" hidden>
+      <strong>Die LED-Ansteuerung ist abgeschaltet.</strong>
+      Es wird <em>keine</em> LED geschaltet – egal wie sie verdrahtet ist.
+      Zum Einschalten in <code>config/parking_layout.json</code>
+      <code>"leds_enabled": true</code> setzen und
+      <code>sudo systemctl restart anna</code> ausführen.
+    </p>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">LED-Selbsttest</h2>
+        <span id="led-test-state" class="meta-line"></span>
+      </div>
+      <p class="meta-line">
+        Sensoren kann man beobachten – LEDs muss man <strong>einschalten und
+        hinsehen</strong>. Das Muster übernimmt die LEDs für 15 Sekunden, danach
+        läuft der Normalbetrieb von selbst weiter.
+      </p>
+      <div class="cell-actions" style="margin-top:10px">
+        <button class="btn" type="button" data-ledtest="gruen">Alle grün</button>
+        <button class="btn" type="button" data-ledtest="rot">Alle rot</button>
+        <button class="btn secondary" type="button" data-ledtest="beide">Alle an</button>
+        <button class="btn secondary" type="button" data-ledtest="aus">Alle aus</button>
+        <select id="led-test-field" class="sel"></select>
+        <button class="btn" type="button" data-ledtest="feld">Nur dieses Feld</button>
+        <button class="btn secondary" type="button" id="led-test-stop">Beenden</button>
+      </div>
+      <p class="meta-line" style="margin-top:8px">
+        <strong>Leuchtet bei „Alle an" nichts?</strong> Dann liegt es an der
+        Verdrahtung oder der Polung der LEDs – nicht an der Software.
+        <strong>Leuchtet das falsche Feld?</strong> Dann stimmt die Pin-Zuordnung
+        in der Konfiguration nicht.
+      </p>
+      <div id="led-test-result"></div>
+    </section>
+
     <section class="panel">
       <div class="panel-head">
         <h2 class="panel-title">Pin-Suche</h2>
