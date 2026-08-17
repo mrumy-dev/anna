@@ -14,7 +14,7 @@
     "default_invert": false,
     "default_pull_up": true,
     "show_reservations": false,
-    "leds_enabled": false,
+    "leds_enabled": true,
     "led_active_high": true
   },
   "areas": [
@@ -32,7 +32,7 @@
           "led_green_pin": 6,
           "led_red_pin": 12,
           "sensor_status": "bestaetigt",
-          "led_status": "vorschlag"
+          "led_status": "bestaetigt"
         },
         {
           "id": "B2",
@@ -43,7 +43,7 @@
           "led_green_pin": 13,
           "led_red_pin": 16,
           "sensor_status": "bestaetigt",
-          "led_status": "vorschlag"
+          "led_status": "bestaetigt"
         },
         {
           "id": "B3",
@@ -54,7 +54,7 @@
           "led_green_pin": 19,
           "led_red_pin": 20,
           "sensor_status": "bestaetigt",
-          "led_status": "vorschlag"
+          "led_status": "bestaetigt"
         },
         {
           "id": "B4",
@@ -65,7 +65,7 @@
           "led_green_pin": 21,
           "led_red_pin": 26,
           "sensor_status": "bestaetigt",
-          "led_status": "vorschlag"
+          "led_status": "bestaetigt"
         }
       ]
     },
@@ -83,7 +83,7 @@
           "led_green_pin": 7,
           "led_red_pin": 8,
           "sensor_status": "bestaetigt",
-          "led_status": "vorschlag"
+          "led_status": "bestaetigt"
         },
         {
           "id": "H2",
@@ -94,7 +94,7 @@
           "led_green_pin": 9,
           "led_red_pin": 10,
           "sensor_status": "bestaetigt",
-          "led_status": "vorschlag"
+          "led_status": "bestaetigt"
         },
         {
           "id": "H3",
@@ -105,7 +105,7 @@
           "led_green_pin": 11,
           "led_red_pin": 18,
           "sensor_status": "bestaetigt",
-          "led_status": "vorschlag"
+          "led_status": "bestaetigt"
         },
         {
           "id": "H4",
@@ -116,10 +116,10 @@
           "led_green_pin": 2,
           "led_red_pin": 3,
           "sensor_status": "vorschlag",
-          "led_status": "vorschlag"
+          "led_status": "bestaetigt"
         }
       ]
     }
   ],
-  "_status": "'sensor_status' / 'led_status' je Parkfeld: 'bestaetigt' = auf dem Raspberry Pi nachweislich in Betrieb (Sensoren B1-H3 am 07.08.2026, Startmeldung '7 Sensor(en) aktiv'). 'vorschlag' = von der Informatik geplant, aber NOCH NICHT verdrahtet und von Elektro zu bestaetigen: das Feld H4 sowie saemtliche LED-Pins. Bestaetigte Pins bitte nicht ohne Ruecksprache aendern - sie laufen bereits."
+  "_status": "'sensor_status' / 'led_status' je Parkfeld: 'bestaetigt' = auf dem Raspberry Pi verdrahtet und in Betrieb (Sensoren B1-H3 am 07.08.2026, Startmeldung '7 Sensor(en) aktiv'; LEDs verdrahtet, Ansteuerung eingeschaltet). 'vorschlag' = von der Informatik geplant, aber noch nicht verdrahtet und von Elektro zu bestaetigen. Bestaetigte Pins bitte nicht ohne Ruecksprache aendern - sie laufen bereits. Stimmt eine LED-Zuordnung nicht, zeigt der Selbsttest es sofort: python scripts/gpio_check.py --led-test oder die Seite /diag."
 }

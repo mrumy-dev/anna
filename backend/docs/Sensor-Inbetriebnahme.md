@@ -244,7 +244,14 @@ Der vorgeschlagene Plan steht in `config/parking_layout.json` bei jedem Feld
 (`led_green_pin` / `led_red_pin`) und in `docs/Architekturkonzept.md`,
 Abschnitt 4.2 - dort mit **beiden** Nummern (BCM und Header-Pin).
 
-### 2. Einschalten
+### 2. Einschalten - der haeufigste Stolperstein
+
+> **Reagiert keine einzige LED, weder rot noch gruen?** Dann steht mit hoher
+> Wahrscheinlichkeit `"leds_enabled": false`. Das Backend steuert dann
+> ueberhaupt keine LED an - unabhaengig davon, wie sauber verdrahtet ist.
+> Erkennbar an der Startmeldung
+> `LED-Ansteuerung ist ABGESCHALTET (settings.leds_enabled = false)`, am roten
+> Hinweis oben auf `/diag` und an `"leds_mode": "none"` in `/api/diagnostics`.
 
 Die Ansteuerung ist **absichtlich abgeschaltet**, bis die Verdrahtung steht:
 LEDs sind Ausgaenge, und ein falsch zugeordneter Ausgang kann Hardware
@@ -261,11 +268,59 @@ INFO anna.leds: LED-Ausgabe bereit: 16 LED(s) an 8 Feld(ern), active_high=True.
 INFO anna.api: Hintergrund-Takt fuer die Status-LEDs laeuft (1.5 s).
 ```
 
-### 3. Pruefen
+### 3. Pruefen - der LED-Selbsttest
 
-Auf `/diag` zeigt die Spalte **LED** je Feld zwei Punkte (gruen/rot) und die
-zugehoerigen Pins - genau das, was das Backend gerade ansteuert. Ein Auto
-auf- und abstellen: der Punkt muss mitwechseln.
+Bei Sensoren kann man Pegel beobachten. Bei **Ausgaengen geht das nicht** - man
+muss sie einschalten und hinsehen. Dafuer gibt es den Selbsttest.
+
+Auf `/diag` im Abschnitt **LED-Selbsttest**:
+
+| Knopf | Was er beantwortet |
+|---|---|
+| **Alle an** | Leuchtet ueberhaupt etwas? Nein -> Verdrahtung/Polung, nicht die Software. |
+| **Alle gruen** / **Alle rot** | Sitzt jede Farbe am richtigen Pin? |
+| **Nur dieses Feld** | Stimmt die Zuordnung Feld ↔ LED? |
+| **Alle aus** | Gehen wirklich alle aus? |
+
+Das Muster uebernimmt die LEDs fuer 15 Sekunden, danach laeuft der
+Normalbetrieb von selbst weiter. Ohne Browser geht dasselbe am Pi:
+
+```bash
+sudo systemctl stop anna
+cd ~/anna/backend && source .venv/bin/activate
+python scripts/gpio_check.py --led-test
+```
+
+Auswertung:
+
+- **Nichts leuchtet** -> LEDs falsch gepolt (Anode/Kathode vertauscht),
+  Vorwiderstand fehlt, oder sie haengen gegen 3V3 statt gegen GND. In dem Fall
+  `"led_active_high": false` probieren.
+- **Ein ganzer Block bleibt dunkel (H1-H4)** -> sehr wahrscheinlich sind SPI
+  oder I2C eingeschaltet. Dann haelt der Kerneltreiber diese Pins und die LEDs
+  lassen sich nicht oeffnen:
+
+  ```bash
+  sudo raspi-config nonint get_spi     # 0 = eingeschaltet -> Problem
+  sudo raspi-config nonint get_i2c     # 0 = eingeschaltet -> Problem
+  pinctrl get 2,3,7,8,9,10,11          # muss "op" (Ausgang) zeigen, nicht "a0"/"a3"
+  ```
+
+  H1 (GPIO7/8), H2 (GPIO9/10) und H3-gruen (GPIO11) liegen auf **SPI0**,
+  H4 (GPIO2/3) auf **I2C**. Abhilfe: SPI/I2C in `sudo raspi-config` unter
+  Interface Options abschalten, oder diese LEDs auf freie Pins legen.
+- **Falsches Feld leuchtet** -> Pin-Zuordnung in `config/parking_layout.json`
+  korrigieren (der Test nennt die Pins je Feld).
+- **Nur eine Farbe leuchtet** -> die andere LED ist defekt oder verkehrt gepolt.
+
+Im Normalbetrieb zeigt die Spalte **LED** auf `/diag` je Feld zwei Punkte
+(gruen/rot) und die zugehoerigen Pins - genau das, was das Backend ansteuert.
+Ein Auto auf- und abstellen: der Punkt muss mitwechseln.
+
+> Die LED folgt der **entprellten** Belegung (`confirmations`), die Spalte
+> "Auswertung" zeigt den **rohen** Sensorwert. Direkt nach dem Umstellen
+> koennen sich beide daher fuer ein bis zwei Messungen unterscheiden - das ist
+> beabsichtigt und kein Fehler.
 
 Leuchtet eine LED **genau verkehrt herum** (an statt aus), haengt sie gegen
 3V3 oder an einem invertierenden Treiber - dann in den `settings`:

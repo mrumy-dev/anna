@@ -125,7 +125,8 @@ def test_gpio_leds_survive_broken_pin(fake_gpio):
     leds.apply({"A1": False})
     assert gpio.outputs[6] is True               # gruen funktioniert weiter
     assert leds.states()["A1"]["error"]          # Fehler wird gemeldet
-    assert leds.health()["failed"] == ["A1"]
+    assert leds.health()["failed"] == ["A1/red"]   # je LED, nicht je Feld
+    assert leds.health()["total"] == 2             # gruen + rot
 
 
 def test_gpio_leds_active_low(fake_gpio):
@@ -288,12 +289,36 @@ def test_diagnostics_reports_led_state(led_layout):
     assert row["led"] is not None
 
 
-def test_diagnostics_without_leds():
+@pytest.fixture
+def no_led_layout(tmp_path, monkeypatch):
+    """Konfiguration mit ausdruecklich abgeschalteter LED-Ansteuerung."""
+    from app.config import layout_path
+
+    data = json.loads(layout_path().read_text(encoding="utf-8"))
+    data["settings"]["leds_enabled"] = False
+    path = tmp_path / "layout.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setenv("ANNA_LAYOUT", str(path))
+    return path
+
+
+def test_diagnostics_without_leds(no_led_layout):
     app = create_app()
     app.testing = True
     data = app.test_client().get("/api/diagnostics").get_json()
     assert data["leds_enabled"] is False
     assert data["leds_mode"] == "none"
+    # Der Grund muss dastehen - sonst sieht "abgeschaltet" wie ein
+    # Hardwarefehler aus und man sucht tagelang an der Verdrahtung.
+    assert "abgeschaltet" in data["leds_reason"].lower()
+
+
+def test_led_test_rejected_when_disabled(no_led_layout):
+    app = create_app()
+    app.testing = True
+    resp = app.test_client().post("/api/diag/led-test?mode=beide")
+    assert resp.status_code == 400
+    assert "leds_enabled" in resp.get_json()["error"]
 
 
 # --- Hintergrund-Takt ------------------------------------------------------
@@ -332,7 +357,7 @@ def test_ticker_runs_without_any_browser(fake_gpio, all_free, led_layout,
         rt._stop_ticker()
 
 
-def test_no_ticker_without_leds(monkeypatch):
+def test_no_ticker_without_leds(monkeypatch, no_led_layout):
     """Ohne LEDs braucht es keinen Hintergrund-Takt."""
     import threading
 
@@ -341,3 +366,196 @@ def test_no_ticker_without_leds(monkeypatch):
     app = create_app()
     assert app.config["RUNTIME"].leds.name == "none"
     assert "anna-leds" not in ({t.name for t in threading.enumerate()} - before)
+
+
+# --- Selbsttest fuer Ausgaenge --------------------------------------------
+def test_test_pattern_modes():
+    from app.actuators import test_pattern
+
+    ids = ["B1", "B2"]
+    assert test_pattern(ids, "gruen") == {"B1": (True, False), "B2": (True, False)}
+    assert test_pattern(ids, "rot") == {"B1": (False, True), "B2": (False, True)}
+    assert test_pattern(ids, "beide") == {"B1": (True, True), "B2": (True, True)}
+    assert test_pattern(ids, "aus") == {"B1": (False, False), "B2": (False, False)}
+    assert test_pattern(ids, "feld", "B2") == {"B1": (False, False), "B2": (True, True)}
+
+
+def test_test_pattern_rejects_nonsense():
+    from app.actuators import test_pattern
+
+    with pytest.raises(ValueError):
+        test_pattern(["B1"], "blinken")
+    with pytest.raises(ValueError):
+        test_pattern(["B1"], "feld", "ZZ")
+
+
+def test_override_beats_normal_operation():
+    """Das Testmuster muss die Belegung uebersteuern - sonst sieht man nichts."""
+    leds = SimulatedLedBackend(["B1", "B2"])
+    leds.apply({"B1": True, "B2": False})          # B1 belegt -> rot
+    assert leds.states()["B1"] == {"green": False, "red": True}
+
+    leds.set_override({"B1": (True, False), "B2": (True, False)}, seconds=30,
+                      label="gruen")
+    assert leds.states()["B1"] == {"green": True, "red": False}
+
+    # Der Hintergrund-Takt misst weiter - das Muster muss trotzdem stehen bleiben.
+    leds.apply({"B1": True, "B2": False})
+    assert leds.states()["B1"] == {"green": True, "red": False}
+    assert leds.override_info()["label"] == "gruen"
+
+
+def test_override_expires_and_normal_operation_resumes():
+    leds = SimulatedLedBackend(["B1"])
+    leds.set_override({"B1": (True, True)}, seconds=0.5, label="beide")
+    assert leds.override_active() is True
+
+    import time as _t
+    _t.sleep(0.6)
+    assert leds.override_active() is False
+    leds.apply({"B1": True})                        # belegt -> rot
+    assert leds.states()["B1"] == {"green": False, "red": True}
+
+
+def test_override_can_be_cleared():
+    leds = SimulatedLedBackend(["B1"])
+    leds.set_override({"B1": (True, True)}, seconds=30)
+    leds.set_override(None)
+    assert leds.override_active() is False
+    assert leds.override_info() is None
+
+
+def test_led_test_endpoint_drives_all_leds(fake_gpio, all_free, led_layout):
+    gpio = fake_gpio(all_free)
+
+    def factory(system, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(system))
+
+    system, _ = load_layout()
+    b1 = system.space("B1")
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    client = app.test_client()
+
+    resp = client.post("/api/diag/led-test?mode=beide&seconds=30")
+    assert resp.status_code == 200
+    assert gpio.outputs[b1.led_green_pin] is True
+    assert gpio.outputs[b1.led_red_pin] is True
+
+    # Nur ein Feld - damit laesst sich die Zuordnung pruefen.
+    client.post("/api/diag/led-test?mode=feld&space=B1&seconds=30")
+    assert gpio.outputs[b1.led_green_pin] is True
+    h1 = system.space("H1")
+    assert gpio.outputs[h1.led_green_pin] is False
+
+    # Beenden -> Normalbetrieb (alle frei -> gruen)
+    assert client.delete("/api/diag/led-test").status_code == 200
+    assert gpio.outputs[b1.led_green_pin] is True
+    assert gpio.outputs[b1.led_red_pin] is False
+
+
+def test_led_test_rejects_unknown_mode(led_layout):
+    app = create_app()
+    app.testing = True
+    resp = app.test_client().post("/api/diag/led-test?mode=disco")
+    assert resp.status_code == 400
+
+
+# --- Regression: fehlgeschlagenes Schalten darf nichts einfrieren ---------
+def test_failed_write_is_retried_and_reported(fake_gpio):
+    """Ein Schreibfehler darf das Feld nicht dauerhaft dunkel stehen lassen.
+
+    Fruehere Fehlerquelle: Der Zwischenspeicher `_last` merkte sich den
+    Sollzustand AUCH nach einem fehlgeschlagenen led.on(). Beim naechsten Takt
+    griff die Abkuerzung "unveraendert - nicht schreiben", und das Feld blieb
+    fuer immer dunkel - waehrend states() "green: true, error: null" meldete.
+    """
+    gpio = fake_gpio()
+    from app.actuators.gpio import GpioLedBackend
+
+    leds = GpioLedBackend([{"id": "A1", "green_pin": 6, "red_pin": 12}])
+    gruen = gpio.opened[6]
+
+    # Ein einziger Schaltvorgang schlaegt fehl ...
+    original_on = gruen.on
+    kaputt = {"aktiv": True}
+
+    def flaky_on():
+        if kaputt["aktiv"]:
+            raise RuntimeError("Schaltfehler")
+        original_on()
+
+    gruen.on = flaky_on
+    leds.apply({"A1": False})                 # frei -> gruen, schlaegt fehl
+
+    assert gpio.outputs[6] is False
+    assert leds.states()["A1"]["error"], "Der Schreibfehler muss gemeldet werden"
+    assert "A1/green" in leds.health()["failed"]
+
+    # ... beim naechsten Takt wird es erneut versucht.
+    kaputt["aktiv"] = False
+    leds.apply({"A1": False})
+    assert gpio.outputs[6] is True, "Nach dem Fehler muss erneut geschrieben werden"
+    assert leds.states()["A1"]["error"] is None
+    assert leds.health()["failed"] == []
+
+
+def test_errors_are_reported_per_colour(fake_gpio):
+    """Faellt rot aus, darf das den Fehler von gruen nicht verdecken."""
+    fake_gpio(fail_pins=(6, 12))
+    from app.actuators.gpio import GpioLedBackend
+
+    leds = GpioLedBackend([{"id": "A1", "green_pin": 6, "red_pin": 12}])
+    fehler = leds.states()["A1"]["error"]
+    assert "green" in fehler and "red" in fehler
+    assert set(leds.health()["failed"]) == {"A1/green", "A1/red"}
+
+
+# --- /api/health kennt jetzt auch die LEDs --------------------------------
+def test_health_reports_led_failures(fake_gpio, all_free, led_layout):
+    """Fallen LEDs aus, darf die Ampel nicht weiter auf "ok" stehen."""
+    system, _ = load_layout()
+    b1 = system.space("B1")
+    gpio = fake_gpio(all_free, fail_pins=(b1.led_green_pin,))
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+
+    assert h["status"] == "degraded"
+    assert h["leds_mode"] == "gpio"
+    assert h["leds_total"] == 16          # 8 Felder x 2 LEDs
+    assert h["leds_ok"] == 15
+    assert "B1/green" in h["leds_failed"]
+
+
+def test_health_ok_when_all_leds_work(fake_gpio, all_free, led_layout):
+    fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+    assert h["status"] == "ok"
+    assert h["leds_ok"] == 16 and h["leds_failed"] == []
+
+
+def test_spi_pins_are_flagged():
+    """GPIO7-11 sind SPI0 - das muss die Pin-Referenz sagen."""
+    from app import pins as pinmap
+
+    for pin in (7, 8, 9, 10, 11):
+        assert pinmap.pin_warning(pin), f"GPIO{pin} ohne SPI-Hinweis"
+        assert "SPI" in pinmap.pin_warning(pin)
