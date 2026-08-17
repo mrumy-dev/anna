@@ -268,7 +268,50 @@ INFO anna.leds: LED-Ausgabe bereit: 16 LED(s) an 8 Feld(ern), active_high=True.
 INFO anna.api: Hintergrund-Takt fuer die Status-LEDs laeuft (1.5 s).
 ```
 
-### 3. Pruefen - der LED-Selbsttest
+### 3. Der schnellste Test: Neustart
+
+Bei jedem Start leuchten **3 Sekunden lang ALLE LEDs**. Ein Blick aufs Modell
+beantwortet damit ohne einen einzigen Befehl die wichtigste Frage:
+
+```bash
+sudo systemctl restart anna
+```
+
+- **Es leuchtet kurz alles** -> Verdrahtung, Polung und Pin-Zuordnung stimmen.
+  Ab hier kann nur noch die Belegungslogik schuld sein.
+- **Es leuchtet nichts** -> das Problem liegt in der Hardware oder bei den
+  Pin-Nummern. Weiter bei Schritt 4.
+
+(Abschaltbar mit `"led_boot_test_s": 0` in den `settings`.)
+
+### 4. Die echte Verdrahtung finden
+
+Leuchtet beim Start nichts, kennt die Software offenbar die falschen Pins. Ein
+Ausgang gibt keine Rueckmeldung - die Software kann also nicht selbst
+herausfinden, wo eine LED haengt. Deshalb andersherum: **das Programm schaltet
+jeden GPIO einzeln ein und sagt, welcher gerade dran ist.**
+
+```bash
+sudo systemctl stop anna
+```
+
+```bash
+cd ~/anna/backend && source .venv/bin/activate && python scripts/gpio_check.py --find-leds
+```
+
+Auf das Modell schauen und notieren, bei welchem Pin welche LED angeht. Danach
+die gefundenen Nummern in `config/parking_layout.json` bei
+`led_green_pin` / `led_red_pin` eintragen und den Dienst neu starten.
+Sensorpins werden dabei ausgelassen (ein Ausgang gegen einen geschlossenen
+Reed-Schalter waere ein Kurzschluss).
+
+Nur einen einzelnen Pin pruefen - der einfachste denkbare Hardwaretest:
+
+```bash
+python scripts/gpio_check.py --pin 6 --seconds 5
+```
+
+### 5. Pruefen - der LED-Selbsttest
 
 Bei Sensoren kann man Pegel beobachten. Bei **Ausgaengen geht das nicht** - man
 muss sie einschalten und hinsehen. Dafuer gibt es den Selbsttest.

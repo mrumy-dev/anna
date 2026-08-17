@@ -225,6 +225,9 @@ def led_layout(tmp_path, monkeypatch):
 
     data = json.loads(layout_path().read_text(encoding="utf-8"))
     data["settings"]["leds_enabled"] = True
+    # Kein Start-Selbsttest in Tests: der wuerde die ersten Sekunden alle LEDs
+    # uebersteuern und damit die Pruefung des Normalbetriebs verfaelschen.
+    data["settings"]["led_boot_test_s"] = 0
     path = tmp_path / "layout.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     monkeypatch.setenv("ANNA_LAYOUT", str(path))
@@ -559,3 +562,103 @@ def test_spi_pins_are_flagged():
     for pin in (7, 8, 9, 10, 11):
         assert pinmap.pin_warning(pin), f"GPIO{pin} ohne SPI-Hinweis"
         assert "SPI" in pinmap.pin_warning(pin)
+
+
+# --- Start-Selbsttest ------------------------------------------------------
+def test_boot_flash_lights_everything_at_startup(fake_gpio, all_free, tmp_path,
+                                                 monkeypatch):
+    """Nach jedem Neustart muessen kurz ALLE LEDs an sein.
+
+    Ein Blick aufs Modell beantwortet damit ohne einen einzigen Befehl die
+    wichtigste Frage: Kommt ueberhaupt Strom bei den LEDs an?
+    """
+    from app.config import layout_path
+
+    data = json.loads(layout_path().read_text(encoding="utf-8"))
+    data["settings"]["leds_enabled"] = True
+    data["settings"]["led_boot_test_s"] = 30
+    path = tmp_path / "layout.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setenv("ANNA_LAYOUT", str(path))
+
+    gpio = fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    system, _ = load_layout()
+
+    # Alle 16 LEDs muessen an sein - auch die roten, obwohl alles frei ist.
+    for area in system.areas:
+        for space in area.spaces:
+            assert gpio.outputs[space.led_green_pin] is True, f"{space.id} gruen"
+            assert gpio.outputs[space.led_red_pin] is True, f"{space.id} rot"
+
+    assert app.config["RUNTIME"].leds.override_info()["label"] == "Start-Selbsttest"
+
+
+def test_boot_flash_can_be_switched_off(fake_gpio, all_free, led_layout):
+    """led_boot_test_s = 0 -> sofort Normalbetrieb."""
+    gpio = fake_gpio(all_free)
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    system, _ = load_layout()
+    b1 = system.space("B1")
+
+    assert app.config["RUNTIME"].leds.override_info() is None
+    # Ohne Start-Selbsttest schreibt erst die erste Messung die LEDs
+    # (im Betrieb erledigt das der Hintergrund-Takt binnen 1,5 s).
+    app.test_client().get("/api/state")
+    assert gpio.outputs[b1.led_green_pin] is True     # frei -> gruen
+    assert gpio.outputs[b1.led_red_pin] is False
+
+
+def test_boot_flash_is_configured_in_the_shipped_layout():
+    """Die ausgelieferte Konfiguration muss den Start-Selbsttest anhaben."""
+    _, settings = load_layout()
+    assert settings.get("led_boot_test_s", 0) > 0, (
+        "Ohne Start-Selbsttest fehlt die schnellste Rueckmeldung, ob die "
+        "LED-Verdrahtung ueberhaupt funktioniert.")
+
+
+def test_find_leds_skips_sensor_pins():
+    """Die LED-Suche darf niemals einen Sensorpin treiben.
+
+    Ein Ausgang gegen einen geschlossenen Reed-Schalter waere ein Kurzschluss
+    nach GND.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    from app import pins as pinmap
+
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location(
+        "gpio_check", root / "scripts" / "gpio_check.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    system, _ = load_layout()
+    sensorpins = {s.gpio_pin for a in system.areas for s in a.spaces
+                  if s.gpio_pin is not None}
+    kandidaten = [p for p in pinmap.ALL_BCM_PINS
+                  if p not in sensorpins and p not in (0, 1)]
+
+    assert not (set(kandidaten) & sensorpins), "Sensorpin in der LED-Suche!"
+    assert 0 not in kandidaten and 1 not in kandidaten
+    # Alle geplanten LED-Pins muessen enthalten sein, sonst findet die Suche
+    # die eigene Verdrahtung nicht.
+    for area in system.areas:
+        for space in area.spaces:
+            for pin in (space.led_green_pin, space.led_red_pin):
+                if pin is not None:
+                    assert pin in kandidaten, f"GPIO{pin} fehlt in der Suche"

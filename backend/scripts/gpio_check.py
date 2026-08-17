@@ -179,6 +179,103 @@ def led_test(seconds: float) -> None:
           "config/parking_layout.json korrigieren.")
 
 
+def find_leds(seconds: float) -> None:
+    """Treibt JEDEN brauchbaren GPIO nacheinander an und sagt, welcher dran ist.
+
+    Das ist das Gegenstueck zur Pin-Suche bei den Sensoren. Ein Ausgang gibt
+    keine Rueckmeldung - die Software kann also nicht erkennen, wo eine LED
+    haengt. Also andersherum: Das Programm schaltet Pin fuer Pin ein und nennt
+    ihn; wer aufs Modell schaut, sieht welche LED aufleuchtet und notiert es.
+
+    Damit findet man die echte Verdrahtung, ohne den Schaltplan zu kennen.
+
+    Sensorpins werden ausgelassen: Ein Ausgang gegen einen geschlossenen
+    Reed-Schalter waere ein Kurzschluss gegen GND.
+    """
+    system, settings = load_layout()
+
+    try:
+        from gpiozero import LED
+    except ImportError as exc:  # pragma: no cover
+        print(f"gpiozero fehlt: {exc}")
+        print("Installieren mit: pip install -r requirements-pi.txt")
+        return
+
+    sensorpins = {s.gpio_pin for a in system.areas for s in a.spaces
+                  if s.gpio_pin is not None}
+    geplant = {}
+    for a in system.areas:
+        for s in a.spaces:
+            if s.led_green_pin is not None:
+                geplant[s.led_green_pin] = f"{s.id} gruen"
+            if s.led_red_pin is not None:
+                geplant[s.led_red_pin] = f"{s.id} rot"
+
+    kandidaten = [p for p in pinmap.ALL_BCM_PINS
+                  if p not in sensorpins and p not in (0, 1)]
+
+    print("LED-Suche: jeder Pin wird einzeln eingeschaltet.")
+    print(f"{len(kandidaten)} Pins x {seconds:.1f} s = rund "
+          f"{len(kandidaten) * seconds / 60:.0f} Minuten.")
+    print("Schau auf das Modell und notiere, welche LED bei welchem Pin angeht.")
+    print("Sensorpins werden ausgelassen. Abbrechen mit Ctrl+C.\n")
+    print(f"{'BCM':<8}{'Header':<9}{'geplant fuer':<16}{'Hinweis'}")
+    print("-" * 60)
+
+    gefunden: list[str] = []
+    try:
+        for pin in kandidaten:
+            header = pinmap.BCM_TO_BOARD.get(pin, "?")
+            plan = geplant.get(pin, "-")
+            note = pinmap.BCM_NOTES.get(pin, "")
+            print(f"{pin:<8}{header:<9}{plan:<16}{note}", flush=True)
+            try:
+                led = LED(pin, initial_value=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"         -> nicht nutzbar: {exc}")
+                continue
+            try:
+                time.sleep(seconds)
+            finally:
+                led.off()
+                led.close()
+    except KeyboardInterrupt:
+        print("\nAbgebrochen.")
+
+    print("\nFertig. Trage die gefundenen Pins in config/parking_layout.json ein")
+    print("(led_green_pin / led_red_pin je Parkfeld) und starte den Dienst neu:")
+    print("  sudo systemctl restart anna")
+
+
+def drive_pin(pin: int, seconds: float) -> None:
+    """Schaltet EINEN Pin ein - der einfachste denkbare Hardwaretest."""
+    try:
+        from gpiozero import LED
+    except ImportError as exc:  # pragma: no cover
+        print(f"gpiozero fehlt: {exc}")
+        return
+
+    system, _ = load_layout()
+    sensorpins = {s.gpio_pin for a in system.areas for s in a.spaces
+                  if s.gpio_pin is not None}
+    if pin in sensorpins:
+        print(f"GPIO{pin} ist ein SENSOR-Pin. Als Ausgang zu treiben waere ein "
+              f"Kurzschluss, sobald der Schalter schliesst. Abgebrochen.")
+        return
+
+    print(f"GPIO{pin} ({pinmap.describe_pin(pin)}) wird fuer {seconds:.0f} s "
+          f"eingeschaltet ...")
+    led = LED(pin, initial_value=True)
+    try:
+        time.sleep(seconds)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        led.off()
+        led.close()
+    print("Aus. Hat eine LED geleuchtet? Dann haengt sie an diesem Pin.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="ANNA Sensor-Diagnose")
     parser.add_argument("--scan", action="store_true",
@@ -187,6 +284,11 @@ def main() -> None:
                         help="Header-Tabelle BCM <-> physischer Pin ausgeben")
     parser.add_argument("--led-test", action="store_true",
                         help="Testmuster auf die Status-LEDs treiben")
+    parser.add_argument("--find-leds", action="store_true",
+                        help="jeden GPIO einzeln einschalten - findet die "
+                             "tatsaechliche LED-Verdrahtung")
+    parser.add_argument("--pin", type=int, default=None,
+                        help="genau diesen GPIO einschalten (einfachster Test)")
     parser.add_argument("--seconds", type=float, default=8.0,
                         help="Dauer der Pin-Suche (Standard 8)")
     parser.add_argument("--interval", type=float, default=0.5,
@@ -195,6 +297,10 @@ def main() -> None:
 
     if args.pinout:
         print_pinout()
+    elif args.pin is not None:
+        drive_pin(args.pin, args.seconds)
+    elif args.find_leds:
+        find_leds(max(0.5, min(10.0, args.interval * 3)))
     elif args.led_test:
         led_test(max(0.5, min(10.0, args.interval * 4)))
     elif args.scan:

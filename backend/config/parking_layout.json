@@ -4,7 +4,7 @@
   "_wiring": "'pull_up': true = Reed-/Schliesskontakt zwischen GPIO und GND (Standard). false = Sensor legt bei Belegung aktiv HIGH an (z. B. PNP-Naeherungsschalter). null = kein interner Widerstand, dann zusaetzlich 'active_state' (true/false) angeben. 'invert': true dreht belegt/frei um, falls der Sensor genau verkehrt herum meldet.",
   "_stability": "'confirmations': Wie oft ein abweichender Messwert hintereinander auftreten muss, bevor die Anzeige umschaltet. Verhindert Flackern, wenn ein Auto am Rand des Erfassungsbereichs steht. 2 bedeutet bei 1500 ms Abfrageintervall rund 3 s Verzoegerung. 1 schaltet die Glaettung ab. Gilt nur fuer echte Sensoren, nicht im Simulator.",
   "_display": "'show_reservations': false = die Seite ist eine reine Anzeige, an der sich von Hand nichts veraendern laesst (Empfehlung fuer die Vorfuehrung). true blendet je freiem Feld einen Knopf zum Reservieren ein; die API-Endpunkte /api/reserve funktionieren unabhaengig davon immer.",
-  "_leds": "Status-LEDs je Parkfeld: frei = gruen, belegt = rot (0 = gruen, 1 = rot). Meldet ein Sensor gar nichts, bleiben beide LEDs dunkel. 'leds_enabled' muss AUSDRUECKLICH auf true gesetzt werden, sobald die LEDs verdrahtet und die Pins hier bestaetigt sind - LEDs sind Ausgaenge, und ein falsch zugeordneter Ausgang kann Hardware beschaedigen. 'led_active_high': true = LED leuchtet bei HIGH (GPIO -> Vorwiderstand -> LED -> GND, der Normalfall). false, falls die LED gegen 3V3 haengt oder ueber einen invertierenden Treiber geschaltet wird.",
+  "_leds": "Status-LEDs je Parkfeld: frei = gruen, belegt = rot (0 = gruen, 1 = rot). Meldet ein Sensor gar nichts, bleiben beide LEDs dunkel. 'leds_enabled' muss AUSDRUECKLICH auf true gesetzt werden, sobald die LEDs verdrahtet und die Pins hier bestaetigt sind - LEDs sind Ausgaenge, und ein falsch zugeordneter Ausgang kann Hardware beschaedigen. 'led_active_high': true = LED leuchtet bei HIGH (GPIO -> Vorwiderstand -> LED -> GND, der Normalfall). false, falls die LED gegen 3V3 haengt oder ueber einen invertierenden Treiber geschaltet wird. 'led_boot_test_s': Beim Start leuchten fuer so viele Sekunden ALLE LEDs. Ein Blick aufs Modell nach dem Neustart beantwortet damit ohne einen einzigen Befehl die Frage, ob ueberhaupt Strom bei den LEDs ankommt. 0 schaltet den Start-Selbsttest ab.",
   "_pinbudget": "8 Felder x (1 Sensor + 2 LEDs) = 24 Pins. Nutzbar sind GPIO2..27 (26 Pins; GPIO0/1 sind fuer das HAT-EEPROM reserviert). Frei bleiben damit nur GPIO14 und GPIO15 - die sind fuer die serielle Konsole vorgesehen und deshalb bewusst nicht verplant. Hinweis zu GPIO2/GPIO3: Diese haben feste Pull-up-Widerstaende auf der Platine; die daran haengenden LEDs glimmen beim Booten kurz, bis die Software die Pins als Ausgang setzt.",
   "settings": {
     "poll_interval_ms": 1500,
@@ -15,7 +15,8 @@
     "default_pull_up": true,
     "show_reservations": false,
     "leds_enabled": true,
-    "led_active_high": true
+    "led_active_high": true,
+    "led_boot_test_s": 3
   },
   "areas": [
     {

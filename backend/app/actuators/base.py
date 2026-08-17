@@ -108,6 +108,27 @@ class LedBackend(ABC):
             "seconds_left": round(self._override_until - time.monotonic(), 1),
         }
 
+    def boot_flash(self, seconds: float = 3.0) -> None:
+        """Schaltet beim Start kurz ALLE LEDs ein.
+
+        Damit beantwortet ein Blick aufs Modell nach jedem Neustart die
+        wichtigste Frage: Kommt ueberhaupt Strom bei den LEDs an? Leuchtet
+        dabei nichts, liegt es an Verdrahtung, Polung oder Pin-Zuordnung -
+        nicht an der Belegungslogik. Danach uebernimmt automatisch der
+        Normalbetrieb.
+        """
+        ids = list(self.known_ids())
+        if not ids:
+            return
+        log.info("LED-Selbsttest beim Start: alle LEDs fuer %.0f s an. "
+                 "Leuchtet jetzt nichts, liegt es an der Hardware.", seconds)
+        self.set_override({sid: (True, True) for sid in ids},
+                          seconds=seconds, label="Start-Selbsttest")
+
+    def known_ids(self) -> list[str]:
+        """Parkfelder, fuer die dieses Backend LEDs kennt."""
+        return []
+
     # --- Auskunft ---------------------------------------------------------
     def states(self) -> dict[str, dict]:
         """Aktueller LED-Zustand je Feld - fuer die Diagnose-Anzeige."""
@@ -160,6 +181,9 @@ class SimulatedLedBackend(LedBackend):
         for space_id, (green, red) in states.items():
             if space_id in self._states:
                 self._states[space_id] = {"green": green, "red": red}
+
+    def known_ids(self) -> list[str]:
+        return list(self._states)
 
     def states(self) -> dict[str, dict]:
         return {sid: dict(state) for sid, state in self._states.items()}

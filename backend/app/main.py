@@ -174,6 +174,11 @@ class Runtime:
         self.leds = create_led_backend(
             self.system, self.settings, sensor_mode=self.backend.name
         )
+        # Kurzer Selbsttest beim Start: alle LEDs an. Ein Blick aufs Modell
+        # nach dem Neustart sagt damit sofort, ob ueberhaupt Strom ankommt.
+        boot = float(self.settings.get("led_boot_test_s", 3))
+        if boot > 0:
+            self.leds.boot_flash(boot)
         self._app.config.update(
             SYSTEM=self.system,
             BACKEND=self.backend,

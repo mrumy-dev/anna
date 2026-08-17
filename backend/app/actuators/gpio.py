@@ -105,6 +105,9 @@ class GpioLedBackend(LedBackend):
                 # meldet. Beim naechsten Takt wird es erneut versucht.
                 self._last.pop(space_id, None)
 
+    def known_ids(self) -> list[str]:
+        return list(self._leds)
+
     def _errors_for(self, space_id: str) -> str | None:
         """Alle Fehler eines Feldes - Oeffnen UND Schalten, je Farbe."""
         teile = [
