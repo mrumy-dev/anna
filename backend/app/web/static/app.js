@@ -286,12 +286,18 @@ async function refreshHealth() {
     }
 
     // 2. Sensorzustand
-    if (h.status === "error") {
+    //
+    // Gewarnt wird nur, wenn die ANGEZEIGTEN DATEN unzuverlaessig sind - also
+    // bei Sensorproblemen. Ein LED-Ausfall betrifft die Anzeige nicht: Die
+    // Belegung stimmt weiterhin, nur die Lampen am Modell leuchten nicht.
+    // Solche Meldungen gehoeren auf /diag, nicht vor die Besucher der Seite.
+    const sensorenKaputt = (h.sensors_failed || []).length;
+    if (sensorenKaputt >= h.sensors_total && h.sensors_total > 0) {
       show(`Kein Sensor liefert Daten (0 von ${h.sensors_total}). `
         + "Die Anzeige ist derzeit nicht verlässlich.");
       els.modeBadge.className = "badge badge-sim";
-    } else if (h.status === "degraded") {
-      show(`${h.sensors_failed.length} von ${h.sensors_total} Sensoren melden sich nicht`
+    } else if (sensorenKaputt > 0) {
+      show(`${sensorenKaputt} von ${h.sensors_total} Sensoren melden sich nicht`
         + ` (${h.sensors_failed.join(", ")}).`);
       if (h.live) els.modeBadge.className = "badge badge-warn";
     } else {

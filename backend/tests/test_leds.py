@@ -10,6 +10,7 @@ Laeuft ohne Raspberry Pi ueber den gpiozero-Nachbau aus conftest.py.
 from __future__ import annotations
 
 import json
+import pathlib
 
 import pytest
 
@@ -820,3 +821,46 @@ def test_pruefung_verhindert_den_start_nie(fake_gpio, monkeypatch):
     leds = GpioLedBackend([{"id": "A1", "green_pin": 6, "red_pin": 12}])
     leds.apply({"A1": True})
     assert gpio.outputs[12] is True             # rot an, trotz fehlender Pruefung
+
+
+# --- Die Haupt-App darf wegen LEDs nicht Alarm schlagen -------------------
+def test_led_ausfall_meldet_keine_sensorfehler(fake_gpio, all_free, led_layout):
+    """LED-Ausfall darf in /api/health nicht als Sensorproblem erscheinen.
+
+    Fehlerbild vom 19.08.2026: Weil LEDs den Gesamtstatus auf "degraded"
+    setzen, zeigte die Haupt-App den Satz "0 von 8 Sensoren melden sich nicht
+    ()" - ein alarmierender roter Kasten ohne Aussage, bei einem Problem, das
+    die Anzeige gar nicht betrifft.
+    """
+    system, _ = load_layout()
+    b1 = system.space("B1")
+    gpio = fake_gpio(all_free, fail_pins=(b1.led_green_pin, b1.led_red_pin))
+
+    def factory(sys_, settings):
+        from app.sensors import wiring_specs
+        from app.sensors.gpio import GpioSensorBackend
+        return GpioSensorBackend(wiring_specs(sys_))
+
+    app = create_app(backend_factory=factory)
+    app.testing = True
+    h = app.test_client().get("/api/health").get_json()
+
+    # LEDs sind kaputt, Sensoren nicht - das muss unterscheidbar bleiben.
+    assert h["sensors_failed"] == [], (
+        "Ein LED-Ausfall darf niemals als Sensorausfall gemeldet werden")
+    assert h["sensors_ok"] == h["sensors_total"]
+    assert "B1/green" in h["leds_failed"]
+    assert h["status"] == "degraded"
+
+
+def test_haupt_app_wertet_sensors_failed_aus_nicht_den_status():
+    """Das Warnbanner haengt an sensors_failed, nicht am Gesamtstatus.
+
+    Sonst schlaegt es bei jedem LED-Problem an und meldet "0 von 8 Sensoren".
+    """
+    js = (pathlib.Path(__file__).resolve().parent.parent
+          / "app" / "web" / "static" / "app.js").read_text(encoding="utf-8")
+    assert 'h.status === "degraded"' not in js, (
+        "Die Haupt-App darf nicht am Gesamtstatus haengen - der wird auch von "
+        "LED-Ausfaellen ausgeloest.")
+    assert "sensorenKaputt" in js
