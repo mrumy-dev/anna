@@ -21,6 +21,7 @@ Konfiguration `leds_enabled: true` gesetzt ist.
 from __future__ import annotations
 
 import logging
+import time
 
 from .. import pins as pinmap
 from .base import LedBackend
@@ -31,7 +32,8 @@ log = logging.getLogger("anna.leds")
 class GpioLedBackend(LedBackend):
     name = "gpio"
 
-    def __init__(self, specs: list[dict], active_high: bool = True):
+    def __init__(self, specs: list[dict], active_high: bool = True,
+                 check_shorts: bool = True):
         """specs: je Parkfeld {id, green_pin, red_pin}."""
         from gpiozero import LED  # noqa: WPS433 (bewusst lokal)
 
@@ -44,6 +46,8 @@ class GpioLedBackend(LedBackend):
         self._write_errors: dict[str, str] = {}
         self._active_high = active_high
 
+        kurzschluss = self._pins_gegen_masse(specs) if check_shorts else set()
+
         for spec in specs:
             space_id = spec["id"]
             self._specs[space_id] = spec
@@ -51,6 +55,20 @@ class GpioLedBackend(LedBackend):
             for colour, key in (("green", "green_pin"), ("red", "red_pin")):
                 pin = spec.get(key)
                 if pin is None:
+                    continue
+                if pin in kurzschluss:
+                    # Nicht treiben! Ein Pin, der auf Masse festhaengt, zieht
+                    # bei 3,3 V rund 10 mA. Bei 16 solchen Pins waeren das ein
+                    # Vielfaches dessen, was die GPIO-Treiber des Pi vertragen
+                    # (16 mA je Pin, ca. 50 mA gesamt) - und leuchten wuerde
+                    # trotzdem nichts, weil keine LED im Strompfad liegt.
+                    self._errors[f"{space_id}/{colour}"] = (
+                        f"GPIO{pin} haengt auf Masse fest (kein LED-Strompfad) "
+                        f"- Ausgang gesperrt, sonst droht Ueberlast")
+                    log.error("LED-Pin GPIO%s (%s/%s) haengt auf MASSE fest. "
+                              "Ausgang wird NICHT getrieben. Verdrahtung "
+                              "pruefen: Liegt die LED wirklich im Strompfad?",
+                              pin, space_id, colour)
                     continue
                 try:
                     pair[colour] = LED(pin, active_high=active_high,
@@ -71,6 +89,58 @@ class GpioLedBackend(LedBackend):
         else:
             log.warning("LED-Ausgabe eingeschaltet, aber keine einzige LED "
                         "konnte initialisiert werden.")
+
+    # --- Schutzpruefung ---------------------------------------------------
+    @staticmethod
+    def _pins_gegen_masse(specs: list[dict]) -> set[int]:
+        """Findet LED-Pins, die von aussen auf Masse gezogen werden.
+
+        Verfahren: Pin kurz als Eingang MIT internem Pull-up (rund 50 kOhm)
+        lesen. Haengt dort eine LED mit Vorwiderstand gegen Masse, sperrt die
+        LED bei den winzigen 66 uA aus dem Pull-up - der Pin liest HIGH. Liest
+        er trotz Pull-up LOW, liegt ein sehr viel niederohmigerer Weg zur Masse
+        an, in dem KEINE LED sitzt (z. B. Vorwiderstand direkt gegen Masse oder
+        eine Bruecke).
+
+        Solche Pins duerfen nicht getrieben werden: Sie leuchten nicht und
+        ziehen dauerhaft Strom weit ueber dem, was die GPIO-Treiber des Pi
+        vertragen.
+        """
+        try:
+            from gpiozero import Device  # noqa: WPS433
+        except Exception as exc:  # noqa: BLE001
+            # Die Pruefung ist eine Zusatzsicherung - sie darf den Start
+            # niemals verhindern. Ohne sie wird eben nichts gesperrt.
+            log.debug("Kurzschlusspruefung nicht moeglich: %s", exc)
+            return set()
+
+        verdaechtig: set[int] = set()
+        pins = [
+            p for s in specs
+            for p in (s.get("green_pin"), s.get("red_pin"))
+            if p is not None
+        ]
+        for pin in pins:
+            geraet = None
+            try:
+                geraet = Device.pin_factory.pin(pin)
+                geraet.function = "input"
+                geraet.pull = "up"
+                time.sleep(0.002)          # Pegel einschwingen lassen
+                if geraet.state < 0.5:
+                    verdaechtig.add(pin)
+            except Exception as exc:  # noqa: BLE001 - Pruefung darf nie stoeren
+                log.debug("GPIO%s liess sich nicht vorpruefen: %s", pin, exc)
+            finally:
+                if geraet is not None:
+                    try:
+                        geraet.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+        if verdaechtig:
+            log.error("Diese LED-Pins haengen auf Masse fest und werden NICHT "
+                      "getrieben: %s", ", ".join(f"GPIO{p}" for p in sorted(verdaechtig)))
+        return verdaechtig
 
     # --- Ausgabe ----------------------------------------------------------
     def _write(self, states: dict[str, tuple[bool, bool]]) -> None:

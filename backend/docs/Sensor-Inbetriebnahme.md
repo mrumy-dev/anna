@@ -12,6 +12,61 @@ http://<IP-des-Pi>:5000/diag
 
 ---
 
+## Raspberry Pi 5: gpiozero und lgpio NUR aus den Systempaketen
+
+> **Wenn WEDER Sensoren NOCH LEDs funktionieren und im Log
+> `pin_factory=NoneType` oder `Unable to load any default pin factory` steht,
+> ist es fast immer das hier.**
+
+Auf dem Raspberry Pi 5 haengen die Header-Pins am neuen RP1-Chip. Es gibt
+**kein `/dev/gpiochip0` mehr** - auf unserem Geraet ist es `gpiochip15`. Die
+PyPI-Version von `lgpio` sucht fest nach `gpiochip0` und scheitert mit
+`can not open gpiochip`. `gpiozero` findet daraufhin gar keine Pin-Factory,
+und der Pi kann weder Sensoren lesen noch LEDs schalten.
+
+Das Tueckische: Das Backend startet trotzdem, die Web-App laeuft, alle Felder
+stehen dauerhaft auf "frei". Von aussen sieht das exakt wie ein Hardwarefehler
+aus. Genau das hat uns am 19.08.2026 einen halben Tag gekostet.
+
+Pruefen:
+
+```bash
+.venv/bin/python -c "from gpiozero import Device; Device.ensure_pin_factory(); print(type(Device.pin_factory).__name__)"
+```
+
+Erwartet wird `LGPIOFactory` oder `RPiGPIOFactory` - niemals ein Fehler.
+
+Reparieren:
+
+```bash
+sudo apt install -y python3-gpiozero python3-lgpio python3-rpi-lgpio
+cd ~/anna/backend && rm -rf .venv
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements.txt        # NUR die Basis, kein gpiozero/lgpio
+sudo systemctl restart anna
+```
+
+`bash deploy/install.sh` macht das seit dieser Version von selbst richtig.
+
+### SPI und I2C muessen ausgeschaltet bleiben
+
+GPIO7-11 gehoeren zur SPI-, GPIO2/3 zur I2C-Schnittstelle. Sind diese
+eingeschaltet, beanspruchen die Kerneltreiber die Pins und die daran
+haengenden LEDs (H1-H4) lassen sich nicht ansteuern.
+
+```bash
+sudo raspi-config nonint get_spi     # 1 = aus, richtig
+sudo raspi-config nonint get_i2c     # 1 = aus, richtig
+```
+
+Steht dort `0`, abschalten und **neu starten**:
+
+```bash
+sudo raspi-config nonint do_spi 1 && sudo raspi-config nonint do_i2c 1 && sudo reboot
+```
+
+---
+
 ## Zuerst: Sehe ich ueberhaupt echte Sensoren?
 
 Bevor irgendetwas gemessen wird, muss zweifelsfrei feststehen, dass die

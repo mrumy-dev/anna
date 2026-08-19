@@ -1,10 +1,38 @@
-# Zusaetzliche Pakete NUR auf dem Raspberry Pi (echte Sensoren ueber GPIO).
-# Auf dem Laptop nicht noetig - der Simulator laeuft ohne diese Pakete.
+# GPIO-Bibliotheken fuer den Raspberry Pi.
 #
-#   pip install -r requirements.txt        # Basis
-#   pip install -r requirements-pi.txt     # zusaetzlich auf dem Pi
+# ACHTUNG - NICHT EINFACH `pip install -r requirements-pi.txt` AUSFUEHREN.
+# Nimm stattdessen die Systempakete:
 #
-# gpiozero nutzt auf Raspberry Pi OS Bookworm standardmaessig das lgpio-Backend.
-
-gpiozero>=2.0
-lgpio>=0.2
+#     sudo apt install -y python3-gpiozero python3-lgpio python3-rpi-lgpio
+#     python3 -m venv --system-site-packages .venv
+#     pip install -r requirements.txt        # NUR die Basis, ohne GPIO
+#
+# Am einfachsten erledigt das `bash deploy/install.sh` von selbst.
+#
+# WARUM: Auf dem Raspberry Pi 5 haengen die Header-Pins am neuen RP1-Chip.
+# Es gibt kein /dev/gpiochip0 mehr - auf unserem Geraet ist es gpiochip15.
+# Die PyPI-Version von lgpio sucht fest nach gpiochip0 und scheitert mit
+# "can not open gpiochip". gpiozero findet daraufhin GAR KEINE Pin-Factory
+# (pin_factory=NoneType), und WEDER SENSOREN NOCH LEDS funktionieren.
+#
+# Das Tueckische daran: Das Backend startet trotzdem, die Web-App laeuft, und
+# alle Parkfelder stehen dauerhaft auf "frei". Von aussen sieht das exakt wie
+# ein Hardwarefehler aus - genau das hat uns am 19.08.2026 einen halben Tag
+# gekostet. Seither meldet /api/health diesen Zustand als "error".
+#
+# Die Pakete von Raspberry Pi OS (Endung ~rpt) kennen die neue Nummerierung
+# und funktionieren. Aus PyPI installiert, verdecken die unpatchten Versionen
+# sie wieder - deshalb gehoeren sie NICHT ins venv.
+#
+# Nur falls jemand bewusst die PyPI-Variante braucht (aelterer Pi bis
+# einschliesslich Pi 4, wo /dev/gpiochip0 existiert), stehen hier die Namen:
+#
+#   gpiozero>=2.0
+#   lgpio>=0.2
+#
+# Pruefen, ob eine Pin-Factory nutzbar ist:
+#
+#     .venv/bin/python -c "from gpiozero import Device; \
+#         Device.ensure_pin_factory(); print(type(Device.pin_factory).__name__)"
+#
+# Erwartet wird LGPIOFactory oder RPiGPIOFactory - niemals ein Fehler.

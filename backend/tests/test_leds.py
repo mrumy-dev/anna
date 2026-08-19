@@ -756,3 +756,67 @@ def test_zwei_autos_machen_genau_zwei_felder_rot(fake_gpio, all_free, led_layout
     rot = [s.id for a in system.areas for s in a.spaces
            if gpio.outputs[s.led_red_pin]]
     assert rot == ["B3", "H1"], f"rot sind: {rot}"
+
+
+# --- Schutz gegen Pins, die auf Masse festhaengen -------------------------
+def test_kurzgeschlossener_pin_wird_nicht_getrieben(fake_gpio):
+    """Genau das Fehlerbild vom 19.08.2026 am Modell.
+
+    14 LED-Pins lagen ueber einen Widerstand direkt auf Masse - ohne LED im
+    Strompfad. Getrieben zogen sie je rund 10 mA, zusammen weit ueber den
+    50 mA, die die GPIO-Treiber des Pi insgesamt vertragen. Geleuchtet hat
+    trotzdem nichts. Solche Pins darf das Backend gar nicht erst einschalten.
+    """
+    gpio = fake_gpio()
+    gpio.grounded = {6, 12}          # B1 gruen und rot haengen auf Masse
+    from app.actuators.gpio import GpioLedBackend
+
+    leds = GpioLedBackend([
+        {"id": "A1", "green_pin": 6, "red_pin": 12},
+        {"id": "A2", "green_pin": 19, "red_pin": 20},   # unauffaellig
+    ])
+
+    # A1 wurde gesperrt und gemeldet ...
+    assert set(leds.health()["failed"]) == {"A1/green", "A1/red"}
+    assert "Masse" in leds.states()["A1"]["error"]
+
+    # ... und wird auch beim Schalten nicht angefasst.
+    leds.apply({"A1": False, "A2": False})
+    assert 6 not in gpio.outputs and 12 not in gpio.outputs
+
+    # A2 arbeitet ungestoert weiter.
+    assert gpio.outputs[19] is True and gpio.outputs[20] is False
+
+
+def test_gesunde_pins_werden_nicht_faelschlich_gesperrt(fake_gpio):
+    """Eine korrekt verdrahtete LED sperrt bei 66 uA - der Pin liest HIGH."""
+    gpio = fake_gpio()
+    gpio.grounded = set()
+    from app.actuators.gpio import GpioLedBackend
+
+    leds = GpioLedBackend([{"id": "A1", "green_pin": 6, "red_pin": 12}])
+    assert leds.health()["failed"] == []
+    leds.apply({"A1": False})
+    assert gpio.outputs[6] is True
+
+
+def test_pruefung_laesst_sich_abschalten(fake_gpio):
+    gpio = fake_gpio()
+    gpio.grounded = {6}
+    from app.actuators.gpio import GpioLedBackend
+
+    leds = GpioLedBackend([{"id": "A1", "green_pin": 6, "red_pin": 12}],
+                          check_shorts=False)
+    assert leds.health()["failed"] == []      # nichts gesperrt
+
+
+def test_pruefung_verhindert_den_start_nie(fake_gpio, monkeypatch):
+    """Faellt die Vorpruefung aus, laeuft die LED-Ausgabe trotzdem an."""
+    gpio = fake_gpio()
+    import sys
+    delattr(sys.modules["gpiozero"], "Device")   # Device nicht verfuegbar
+    from app.actuators.gpio import GpioLedBackend
+
+    leds = GpioLedBackend([{"id": "A1", "green_pin": 6, "red_pin": 12}])
+    leds.apply({"A1": True})
+    assert gpio.outputs[12] is True             # rot an, trotz fehlender Pruefung

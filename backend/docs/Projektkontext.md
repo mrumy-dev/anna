@@ -18,7 +18,10 @@ Belegungslogik, JSON-API und Web-UI. Autoren: Faris Ridzal, Mohamed Rumy.
 - **Variante 2 „Komfort":** frei/belegt je Feld **+ Filter** nach Typ (Familie,
   Frauen, Behinderte). Anfahrt = **Weiterleitung an Google Maps**, **keine eigene
   GPS-Navigation**.
-- **Rechner: Raspberry Pi 4**, Sprache **Python**.
+- **Rechner: Raspberry Pi 5** (urspruenglich als Pi 4 geplant), Sprache
+  **Python**. Wichtig: Auf dem Pi 5 gibt es kein /dev/gpiochip0 mehr -
+  gpiozero/lgpio muessen aus den APT-Systempaketen kommen, nicht aus PyPI
+  (siehe docs/Sensor-Inbetriebnahme.md).
 - **Sensor: Magnetschalter / Reed-Kontakt** je Parkfeld (digitales Signal).
 - **Modell:** 2 Areale – *Blumenstrasse* (4 Felder), *Hauptstrasse* (4 Felder),
   8 total. Belegt durch metallene Modellautos.

@@ -32,6 +32,9 @@ class FakeGpio:
         self.opened: dict[int, object] = {}
         # Zustand der Ausgangspins (LEDs): {bcm_pin: leuchtet}
         self.outputs: dict[int, bool] = {}
+        # Pins, die von aussen auf Masse gezogen werden
+        # (Verdrahtungsfehler: Widerstand ohne LED im Strompfad)
+        self.grounded: set[int] = set()
 
     def level(self, pin: int) -> int:
         return self.levels.get(pin, 1)
@@ -114,9 +117,42 @@ def install_fake_gpiozero(monkeypatch, levels: dict[int, int] | None = None,
         def close(self) -> None:
             gpio.opened.pop(self._pin_number, None)
 
+    class FakeRawPin:
+        """Roher Pin-Zugriff, wie ihn Device.pin_factory.pin() liefert.
+
+        Damit laesst sich die Kurzschluss-Vorpruefung testen: Ein Pin, den die
+        Hardware auf Masse zieht, liest trotz Pull-up LOW.
+        """
+
+        def __init__(self, number):
+            self.number = number
+            self.function = "input"
+            self.pull = "floating"
+
+        @property
+        def state(self) -> float:
+            if self.number in gpio.grounded:
+                return 0.0            # haengt auf Masse, Pull-up chancenlos
+            if self.pull == "up":
+                return 1.0
+            if self.pull == "down":
+                return 0.0
+            return float(gpio.level(self.number))
+
+        def close(self) -> None:
+            pass
+
+    class FakePinFactory:
+        def pin(self, number):
+            return FakeRawPin(number)
+
+    class FakeDevice:
+        pin_factory = FakePinFactory()
+
     module.Button = FakeButton
     module.DigitalInputDevice = FakeInput
     module.LED = FakeLED
+    module.Device = FakeDevice
     monkeypatch.setitem(sys.modules, "gpiozero", module)
     return gpio
 
